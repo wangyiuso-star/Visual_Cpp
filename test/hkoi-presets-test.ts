@@ -6,7 +6,9 @@ import VariablesPanel from '../src/components/VariablesPanel'
 // 直接引用 HKOI 教學專案裡的 preset 檔（在本倉庫之外，兩專案並排）。
 // 這是「跨專案」驗證：若那個資料夾不存在，打包會失敗，scripts/run-tests.mjs 會把它記為 SKIP
 // 而不是 FAIL，所以本倉庫在別處 clone 也能跑 npm test。
-import { PRESETS } from '../../HKOI_teaching/presets/presets'
+// ⚠️ 資料夾是 VisualCode-preset，不是 presets ——
+//    原本寫成 presets/ 讓這個測試從加入起就一直被 SKIP，等於從來沒驗證過課程 preset。
+import { PRESETS } from '../../HKOI_teaching/VisualCode-preset/presets'
 
 let pass = 0
 let fail = 0
