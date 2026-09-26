@@ -208,7 +208,15 @@ class Parser {
         const pt = this.parseType()
         const byRef = this.eatOp('&')
         const pname = this.expectIdent().value
-        params.push({ name: pname, type: pt, byRef })
+        // 形参数组后缀：int a[] / int a[10] / int a[][3]。长度一律忽略（与 C++ 参数退化为指针一致）。
+        let isArray = false
+        while (this.isOp('[')) {
+          this.next()
+          if (!this.isOp(']')) this.parseExpr()
+          this.expectOp(']')
+          isArray = true
+        }
+        params.push({ name: pname, type: pt, byRef, isArray })
       } while (this.eatOp(','))
     }
     this.expectOp(')')
@@ -262,6 +270,7 @@ class Parser {
     if (this.isIdent('if')) return this.parseIf()
     if (this.isIdent('for')) return this.parseFor()
     if (this.isIdent('while')) return this.parseWhile()
+    if (this.isIdent('do')) return this.parseDo()
     if (this.isIdent('break')) {
       this.next()
       this.expectSemi()
@@ -316,6 +325,21 @@ class Parser {
     this.expectOp(')')
     const body = this.parseStatement()
     return { kind: 'while', line, cond, body }
+  }
+
+  // do <body> while (<cond>);
+  parseDo(): Stmt {
+    const line = this.cur().line
+    this.next() // 吃掉 do
+    const body = this.parseStatement()
+    if (!this.isIdent('while')) throw new ParseError('do 之后需要 while', this.cur().line)
+    const condLine = this.cur().line
+    this.next() // 吃掉 while
+    this.expectOp('(')
+    const cond = this.parseExpr()
+    this.expectOp(')')
+    this.expectSemi()
+    return { kind: 'do', line, condLine, cond, body }
   }
 
   parseFor(): Stmt {

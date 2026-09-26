@@ -27,7 +27,7 @@ export default function App() {
   const [showFor, setShowFor] = useState(true)
   const [condMenuOpen, setCondMenuOpen] = useState(false)
   const [jumpVal, setJumpVal] = useState('')
-  const [editorPct, setEditorPct] = useState(55)
+  const [editorPct, setEditorPct] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 1500 ? 50 : 55))
   const [dragging, setDragging] = useState(false)
   const [boolAsInt, setBoolAsInt] = useState(false)
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set())

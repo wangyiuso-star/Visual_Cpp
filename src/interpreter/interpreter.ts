@@ -15,6 +15,8 @@ export interface Snapshot {
   activeCallId?: number
   error?: string
   done?: boolean
+  // 自定义比较函数排序的统计（比较次数刻意做成可见的教学点，见建议书优先 3）
+  sortInfo?: { name: string; n: number; comparisons: number; warned: boolean }
 }
 
 export interface CallNode {
@@ -53,6 +55,7 @@ interface LValue {
   path: number[]
   cell: Cell
   mem: Memory
+  strIdx?: number
 }
 
 class BreakSignal {}
@@ -82,6 +85,7 @@ interface Runtime {
   input: string[]
   inputPos: number
   structs: Map<string, StructDef>
+  sortInfo: { name: string; n: number; comparisons: number; warned: boolean } | null
 }
 
 const MAX_STEPS = 20000
@@ -549,12 +553,17 @@ function dumpAll(rt: Runtime): VarView[] {
   const out: VarView[] = []
   const seen = new Set<string>()
   for (const name of rt.mem.order) {
+    if (name.indexOf('__sort_') === 0) continue // 排序比较用的临时变量，不展示
     seen.add(name)
     let cell = rt.mem.vars.get(name)!
+    // ref cell 只可能来自「引用参数 / 数组参数」。dump 会解引用（面板显示真实数据），
+    // 但要把「这是别名」这件事记下来，面板才知道该打徽章。
+    const alias = cell.kind === 'ref'
     if (cell.kind === 'ref') cell = getAtPath(cell.target.mem.vars.get(cell.target.name)!, cell.target.path)
-    out.push({ name, cell, scope: 'local' })
+    out.push({ name, cell, scope: 'local', alias })
   }
   for (const name of rt.globals.order) {
+    if (name.indexOf('__sort_') === 0) continue
     if (seen.has(name)) continue
     let cell = rt.globals.vars.get(name)!
     if (cell.kind === 'ref') cell = getAtPath(cell.target.mem.vars.get(cell.target.name)!, cell.target.path)
@@ -576,6 +585,7 @@ function formatCellValue(cell: Cell): string {
 function collectLocals(mem: Memory, exclude?: Set<string>): { name: string; value: string }[] {
   const out: { name: string; value: string }[] = []
   for (const name of mem.order) {
+    if (name.indexOf('__sort_') === 0) continue
     if (exclude && exclude.has(name)) continue
     const cell = mem.vars.get(name)!
     if (cell.kind === 'scalar') out.push({ name, value: formatCellValue(cell) })
@@ -603,6 +613,7 @@ function* mark(rt: Runtime, line: number): Generator<Snapshot> {
     output: rt.out.join(''),
     callTree: cloneCallTree(rt.callTree),
     activeCallId: rt.activeCallId,
+    sortInfo: rt.sortInfo ? { ...rt.sortInfo } : undefined,
   }
   rt.mem.clearAccess()
   yield snap
@@ -629,6 +640,7 @@ function* markCondition(rt: Runtime, line: number, cond: Expr, result: boolean, 
     writes: [],
     judges,
     condition: { kind, text: formatExpr(cond), result },
+    sortInfo: rt.sortInfo ? { ...rt.sortInfo } : undefined,
     vars: dumpAll(rt),
     output: rt.out.join(''),
     callTree: cloneCallTree(rt.callTree),
@@ -638,6 +650,77 @@ function* markCondition(rt: Runtime, line: number, cond: Expr, result: boolean, 
   yield snap
 }
 
+// 调用用户自定义比较函数 cmp(a, b)：true 表示 a 应排在 b 前面。
+// 做法是合成一个 call 表达式复用现有的函数调用机制——参数绑定、调用树、步进全部一致。
+function* callComparator(
+  rt: Runtime,
+  fnName: string,
+  a: Cell,
+  b: Cell,
+  line: number,
+): Generator<Snapshot, boolean> {
+  // 把两个待比较元素挂到当前帧的两个隐藏变量上，再合成 cmp(__sort_a, __sort_b) 调用。
+  // 这样实参走的是「和手写调用完全相同」的绑定路径，标量 / struct / pair 元素都能比较
+  //（若用 literal 就只能传标量，C711 那种「按关联数据排序」就做不了）。
+  rt.mem.declare('__sort_a', a)
+  rt.mem.declare('__sort_b', b)
+  const res = yield* evalExpr(rt, {
+    kind: 'call',
+    line,
+    name: fnName,
+    args: [
+      { kind: 'ident', line, name: '__sort_a' },
+      { kind: 'ident', line, name: '__sort_b' },
+    ],
+  })
+  return truthy(res)
+}
+
+// 手写自底向上归并排序：稳定（相等元素保持原顺序），比较时 yield* 调用用户 cmp。
+// 刻意不用 Array.prototype.sort —— 它不保证稳定，多关键字示范会出现无法解释的顺序抖动。
+function* stableSortWithCmp(
+  rt: Runtime,
+  cells: Cell[],
+  cmpName: string,
+  line: number,
+  stats: { comparisons: number; warned: boolean },
+  onProgress?: (arr: Cell[]) => void,
+): Generator<Snapshot, Cell[]> {
+  const arr = cells.slice()
+  const n = arr.length
+  const buf: Cell[] = new Array(n)
+  for (let width = 1; width < n; width *= 2) {
+    for (let lo = 0; lo < n; lo += 2 * width) {
+      const mid = Math.min(lo + width, n)
+      const hi = Math.min(lo + 2 * width, n)
+      let i = lo
+      let j = mid
+      let k = lo
+      while (i < mid && j < hi) {
+        stats.comparisons++
+        // 先比右侧：只有 cmp(arr[j], arr[i]) 为真才先取右侧 → 相等时保留左侧，因而稳定
+        const takeRight = yield* callComparator(rt, cmpName, arr[j], arr[i], line)
+        if (takeRight) buf[k++] = arr[j++]
+        else buf[k++] = arr[i++]
+      }
+      while (i < mid) buf[k++] = arr[i++]
+      while (j < hi) buf[k++] = arr[j++]
+      for (let t = lo; t < hi; t++) arr[t] = buf[t]
+      // 把当前进展写回 memory，让学生在看比较的同时看到数组逐步有序
+      if (onProgress) onProgress(arr)
+    }
+  }
+  // 严格弱序检查：排好之后，不应出现「后一个元素排在前一个前面」。
+  // 这能稳稳抓到初学者最常犯的错（cmp 写成 a <= b、或恒返回 true），且不污染展示用的比较次数。
+  for (let i = 0; i + 1 < n; i++) {
+    if (yield* callComparator(rt, cmpName, arr[i + 1], arr[i], line)) {
+      stats.warned = true
+      break
+    }
+  }
+  return arr
+}
+
 function* resolveTarget(rt: Runtime, expr: Expr, forWrite = false): Generator<Snapshot, LValue> {
   if (expr.kind === 'ident') {
     const r = getVar(rt, expr.name, expr.line)
@@ -645,6 +728,12 @@ function* resolveTarget(rt: Runtime, expr: Expr, forWrite = false): Generator<Sn
   }
   if (expr.kind === 'index') {
     const parent = yield* resolveTarget(rt, expr.target, forWrite)
+    if (parent.cell.kind === 'scalar' && parent.cell.type === 'string') {
+      const idx = toIndex(yield* evalExpr(rt, expr.index), expr.line)
+      const s = (parent.cell.value ?? '') as string
+      if (idx < 0 || idx >= s.length) throw new RuntimeError('下标 ' + idx + ' 越界（长度 ' + s.length + '）', expr.line)
+      return { name: parent.name, path: parent.path, cell: { kind: 'scalar', type: 'char', value: s[idx] }, mem: parent.mem, strIdx: idx }
+    }
     if (parent.cell.kind === 'scalar') throw new RuntimeError('该变量不是容器，不能下标访问', expr.line)
     if (parent.cell.kind === 'map' || parent.cell.kind === 'umap') {
       const keyTypeName = scalarName(parent.cell.keyType, expr.line)
@@ -705,7 +794,7 @@ function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     case 'index': {
       const lv = yield* resolveTarget(rt, expr)
       if (lv.cell.kind !== 'scalar') throw new RuntimeError('不能把子容器当作标量读取', expr.line)
-      rt.mem.logRead(lv.name, lv.path)
+      rt.mem.logRead(lv.name, lv.strIdx !== undefined ? lv.path.concat(lv.strIdx) : lv.path)
       return { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
     }
 
@@ -811,6 +900,11 @@ function* execAssign(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   }
   const cur: RV = { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
   const nv = combineAssign(expr.op, cur, value, expr.line)
+  if (lv.strIdx !== undefined) {
+    lv.mem.setStringChar(lv.name, lv.path, lv.strIdx, nv.v)
+    rt.mem.logWrite(lv.name, lv.path.concat(lv.strIdx))
+    return { type: lv.cell.type, v: nv.v }
+  }
   lv.mem.setScalar(lv.name, lv.path, nv.v)
   rt.mem.logWrite(lv.name, lv.path)
   return { type: lv.cell.type, v: nv.v }
@@ -864,13 +958,63 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   }
 
   if (name === 'sort' || name === 'reverse') {
-    const lv = yield* resolveTarget(rt, expr.args[0], true)
+    if (expr.args.length === 0) throw new RuntimeError(name + ' 需要至少 1 个参数（容器）', expr.line)
+    const a0 = expr.args[0]
+    // 迭代器形式（v.begin() / v.end()）不支持，给出明确提示而不是误导性的下标错误
+    if (a0.kind === 'method_call' && (a0.method === 'begin' || a0.method === 'end')) {
+      throw new RuntimeError('不支持迭代器形式，请用 ' + name + '(v) 或 ' + name + '(v, n)', expr.line)
+    }
+    // 参数形态：sort(v) / sort(v, n) / sort(v, cmp) / sort(v, n, cmp)；reverse 只有 (v) / (v, n)
+    let cmpName: string | null = null
+    let countArg: Expr | undefined
+    if (name === 'sort' && expr.args.length >= 2) {
+      const second = expr.args[1]
+      if (second.kind === 'ident' && rt.functions.has(second.name)) {
+        cmpName = second.name
+        if (expr.args.length >= 3) throw new RuntimeError('比较函数形式是 sort(v, cmp) 或 sort(v, n, cmp)', expr.line)
+      } else {
+        countArg = second
+        const third = expr.args[2]
+        if (third) {
+          if (third.kind === 'ident' && rt.functions.has(third.name)) cmpName = third.name
+          else throw new RuntimeError('sort 的第三个参数应是自定义比较函数的名字', expr.line)
+        }
+      }
+    } else if (name === 'reverse' && expr.args.length >= 3) {
+      throw new RuntimeError('reverse 只接受 reverse(v) 或 reverse(v, n)', expr.line)
+    } else {
+      countArg = expr.args[1]
+    }
+    const lv = yield* resolveTarget(rt, a0, true)
+    if (lv.cell.kind === 'scalar' && lv.cell.type === 'string') {
+      if (name === 'sort') throw new RuntimeError('sort 不支持 string，请用 reverse', expr.line)
+      const s = (lv.cell.value ?? '') as string
+      lv.mem.setScalar(lv.name, lv.path, s.split('').reverse().join(''))
+      rt.mem.logWrite(lv.name, lv.path)
+      return { type: 'int', v: 0 }
+    }
     if (lv.cell.kind !== 'array' && lv.cell.kind !== 'vector') throw new RuntimeError(name + ' 需要数组或 vector', expr.line)
     const len = lv.cell.cells.length
-    const n = expr.args[1] ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line))) : len
+    const n = countArg ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, countArg), expr.line))) : len
     let part = lv.cell.cells.slice(0, n)
-    if (name === 'sort') part = part.sort((x, y) => scalarCmp(cellScalar(x), cellScalar(y)))
-    else part = part.reverse()
+    if (name === 'sort') {
+      if (cmpName) {
+        const stats = { name: lv.name, n, comparisons: 0, warned: false }
+        rt.sortInfo = stats
+        const origAll = lv.cell.cells.slice()
+        part = yield* stableSortWithCmp(rt, part, cmpName, expr.line, stats, (cur) => {
+          const fullNow = origAll.slice()
+          for (let i = 0; i < cur.length; i++) fullNow[i] = cur[i]
+          lv.mem.updateAt(lv.name, lv.path, (c) => (c.kind === 'array' || c.kind === 'vector' ? { ...c, cells: fullNow } : c))
+        })
+      } else {
+        rt.sortInfo = null
+        part = part.sort((x, y) => scalarCmp(cellScalar(x), cellScalar(y)))
+      }
+    } else {
+      rt.sortInfo = null
+      part = part.reverse()
+    }
     const full = lv.cell.cells.slice()
     for (let i = 0; i < n; i++) full[i] = part[i]
     lv.mem.updateAt(lv.name, lv.path, (c) => (c.kind === 'array' || c.kind === 'vector' ? { ...c, cells: full } : c))
@@ -878,11 +1022,18 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     return { type: 'int', v: 0 }
   }
   if (name === 'lower_bound') {
-    const lv = yield* resolveTarget(rt, expr.args[0])
+    if (expr.args.length < 2) throw new RuntimeError('lower_bound 需要 2 个参数 (v, x) 或 3 个参数 (v, n, x)', expr.line)
+    const a0 = expr.args[0]
+    if (a0.kind === 'method_call' && (a0.method === 'begin' || a0.method === 'end')) {
+      throw new RuntimeError('不支持迭代器形式，请用 lower_bound(v, x) 或 lower_bound(v, n, x)', expr.line)
+    }
+    const lv = yield* resolveTarget(rt, a0)
     if (lv.cell.kind !== 'array' && lv.cell.kind !== 'vector') throw new RuntimeError('lower_bound 需要数组或 vector', expr.line)
     const len = lv.cell.cells.length
-    const n = expr.args[1] ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line))) : len
-    const x = yield* evalExpr(rt, expr.args[2])
+    // 两种形式：lower_bound(v, x) 全区间；lower_bound(v, n, x) 前 n 个
+    const hasN = expr.args.length >= 3
+    const n = hasN ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line))) : len
+    const x = yield* evalExpr(rt, expr.args[hasN ? 2 : 1])
     for (let i = 0; i < n; i++) {
       if (scalarCmp(cellScalar(lv.cell.cells[i]), x.v) >= 0) {
         rt.mem.logRead(lv.name, lv.path.concat(i))
@@ -911,8 +1062,15 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   const argData: ({ rv: RV } | { lv: LValue })[] = []
   for (let i = 0; i < expr.args.length; i++) {
     const p = fn.params[i]
-    if (p && p.byRef) {
-      argData.push({ lv: yield* resolveTarget(rt, expr.args[i], true) })
+    if (p && (p.byRef || p.isArray)) {
+      const ax = expr.args[i]
+      // 数组形参只接受「数组名」这类可定位的实参；字面量/算式先给清楚错误，
+      // 否则会先撞上 resolveTarget 的「非法的下标访问」，对初学者毫无指引。
+      if (p.isArray && ax.kind !== 'ident' && ax.kind !== 'member' && ax.kind !== 'index') {
+        throw new RuntimeError('数组形参 ' + p.name + ' 需要传入数组名（int a[]），不能传字面量或算式', expr.line)
+      }
+      // 引用参数与数组参数都要拿到调用方的 lvalue（共享同一份数据）
+      argData.push({ lv: yield* resolveTarget(rt, ax, true) })
     } else if (p && p.type.kind !== 'scalar') {
       argData.push({ lv: yield* resolveTarget(rt, expr.args[i]) })
     } else {
@@ -924,8 +1082,15 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   for (let i = 0; i < fn.params.length; i++) {
     const p = fn.params[i]
     const d = argData[i]
-    if (p.byRef) {
+    if (p.byRef || p.isArray) {
+      // 数组形参绑定为 ref cell：dumpAll 会解引用，面板直接显示真实数组；
+      // 函数内的 a[i] 写入落到调用方的 memory，因而调用方可见（真实 C++ 的共享语义）。
       const lv = (d as { lv: LValue }).lv
+      if (p.isArray && lv.cell.kind !== 'array') {
+        // 建议书要求：传 vector / 纯量 / 表达式时要给清楚的错误，而不是内部的「非法的下标访问」
+        const desc = lv.cell.kind === 'scalar' ? '标量' : lv.cell.kind
+        throw new RuntimeError('数组形参 ' + p.name + ' 需要传入数组（int a[]），实际收到 ' + desc, expr.line)
+      }
       newMem.declare(p.name, { kind: 'ref', target: { mem: lv.mem, name: lv.name, path: lv.path } })
     } else if (p.type.kind === 'scalar') {
       const rv = d && 'rv' in d ? (d as { rv: RV }).rv : ({ type: 'int', v: 0 } as RV)
@@ -937,7 +1102,7 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   }
 
   const callId = rt.nextCallId++
-  const label = name + '(' + expr.args.map(formatExpr).join(', ') + ')'
+  const label = name + '(' + argData.map((d, i) => ('rv' in d ? toStringVal((d as { rv: RV }).rv, rt.boolAsInt) : expr.args[i] ? formatExpr(expr.args[i]) : '?')).join(', ') + ')'
   const node: CallNode = { id: callId, label, returned: false, returnValue: null, locals: [], paramNames: fn.params.map((p) => p.name), children: [] }
   const parentPath = callPath(rt.callTree, rt.activeCallId) ?? []
   rt.callTree = updateCallAt(rt.callTree, parentPath, (n) => ({ ...n, children: [...n.children, node] }))
@@ -974,6 +1139,33 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   const obj = yield* resolveTarget(rt, expr.object)
   const method = expr.method
   const c = obj.cell
+
+  if (c.kind === 'scalar' && c.type === 'string') {
+    const s = (c.value ?? '') as string
+    if (method === 'length' || method === 'size') {
+      rt.mem.logRead(obj.name, obj.path)
+      return { type: 'int', v: s.length }
+    }
+    if (method === 'substr') {
+      if (expr.args.length < 1) throw new RuntimeError('substr 需要 1~2 个参数', expr.line)
+      const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      const len = expr.args[1] ? toIndex(yield* evalExpr(rt, expr.args[1]), expr.line) : Math.max(0, s.length - pos)
+      rt.mem.logRead(obj.name, obj.path)
+      return { type: 'string', v: s.substr(pos, len) }
+    }
+    if (method === 'find') {
+      if (expr.args.length < 1) throw new RuntimeError('find 需要 1 个参数', expr.line)
+      const t = toStringVal(yield* evalExpr(rt, expr.args[0]), rt.boolAsInt)
+      rt.mem.logRead(obj.name, obj.path)
+      return { type: 'int', v: s.indexOf(t) }
+    }
+    if (method === 'clear') {
+      obj.mem.setScalar(obj.name, obj.path, '')
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    throw new RuntimeError('不支持的 string 方法 "' + method + '"', expr.line)
+  }
 
   if (c.kind === 'vector') {
     if (method === 'push_back') {
@@ -1468,6 +1660,33 @@ function* execStmt(rt: Runtime, s: Stmt): Generator<Snapshot> {
       break
     }
 
+    case 'do': {
+      while (true) {
+        try {
+          yield* execStmt(rt, s.body)
+        } catch (e) {
+          // continue 在 do-while 里等价于「跳到条件判断」，所以这里不跳过下面的条件求值
+          if (e instanceof ContinueSignal) {
+            // 落到条件判断
+          } else if (e instanceof BreakSignal) {
+            break
+          } else {
+            throw e
+          }
+        }
+        // do-while 唯一需要看懂的差别就在这里：body 已经执行完，此刻尚未检查条件。
+        // 刻意在求值条件之前产出一个快照（高亮 while 行、右侧已是 body 之后的状态、还没有判断横幅），
+        // 学生才能看到「先跑一次，再判断」。
+        yield* mark(rt, s.condLine)
+        const c = yield* evalExpr(rt, s.cond)
+        const result = truthy(c)
+        if (rt.showCond.while) yield* markCondition(rt, s.condLine, s.cond, result, 'while')
+        else rt.mem.clearAccess()
+        if (!result) break
+      }
+      break
+    }
+
     case 'for': {
       if (s.init) yield* execStmt(rt, s.init)
       while (true) {
@@ -1529,6 +1748,7 @@ export function* run(program: Program, opts?: RunOptions): Generator<Snapshot> {
     input: (opts?.input ?? '').split(/\s+/).filter((s) => s.length > 0),
     inputPos: 0,
     structs: program.structs,
+    sortInfo: null,
   }
 
   rt.mem = rt.globals

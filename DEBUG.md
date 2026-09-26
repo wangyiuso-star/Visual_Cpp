@@ -46,3 +46,28 @@
 ### 失败预算记录
 - 规则：同一方案最多 3 次；达上限停止并汇报，绝不无限重试。
 - 当前：ResizeObserver 方案 = 第 1 次（已落地）。若用户硬刷新后仍坏 → 第 2 次（CodeEditor 内直接传像素高度）；仍坏 → 第 3 次（隔离最小复现定位高度链）；第 3 次失败即停止汇报。
+## ✅ 已解决：笔记本上「数据结构大小不合理」+ 工具栏被挤出屏幕（2026-08-16）
+
+**现象**：搬到笔记本后右侧数据结构「大小不合理」，递归树显示变量名而非实际值。
+**根因（3 处固定尺寸假设）**：
+1. .viz-main 是固定两列 repeat(2, minmax(0,1fr))，全表无任何 @media。笔记本右侧面板仅占 45% 宽，两列后每列约 280px；vector<int>（10 格、每格约 45px）被挤成 2~5 行，卡片被撑得又高又窄。
+2. .topbar 单行不换行；Windows 笔记本常见 125%/150% 缩放会把 CSS 视口压到约 1093/1280px，工具栏控件被挤出视口、点不到。
+3. 调用树 SLOT=130 / DH=76 为常量；标签改用真实参数值后（如 solve(10, 3, 1000000)）变长，相邻节点重叠，局部变量多时竖向也挤压。
+**修复**：
+- src/index.css：.shape-horizontal 改 grid-column: 1 / -1；.viz-body 加 container-type: inline-size；新增 @media (max-width: 1440/1180/980px)（右侧退化为单列 + 分档收紧格子与工具栏）+ @container (max-width: 680px)（面板被手动拖窄时同样退化单列）；.topbar 加 flex-wrap: wrap 与 row-gap: 8px；.tree-scroll 的 max-height 改 min(420px, 42vh)。
+- src/components/VariablesPanel.tsx：CallTreeGraph 按真实标签字符数与局部变量行数计算 SLOT/NH/DH。
+- src/App.tsx：首次进入按 window.innerWidth < 1500 决定默认分割比（50% / 55%）。
+**验证**：npm run build exit 0；dev 探 http://localhost:5173/ 返回 200；产物 CSS 含 3 组媒体查询 + @container (width<=680px) + container-type:inline-size；回归 15 个测试全过；test/calllabel-test.ts 验证标签为 fib(5)/show(7)。
+
+## ⚠️ 已知既存问题（非本次引入）：npm run typecheck 约 90 个类型错误
+分布：interpreter.ts 71 / VariablesPanel.tsx 17 / parser.ts 1 / CodeEditor.tsx 1。全部是联合类型未收窄（访问 expr.args、cell.cells、cell.elemType、Event.button）。原因是 vite build 只做转译不做类型检查，所以一直未被发现。不影响运行；清理时需逐个加 kind 判断收窄或类型谓词。
+## ✅ 已解决：递归树调用时无法自动跟随（2026-08-16）
+
+**现象**：递归/调用树在递归调用时不会自动跟随当前活动节点，节点跑到视野外就看不见了。
+**根因**：CallTreeGraph 用固定 SLOT 横向铺开节点，容器 .tree-scroll 是 overflow:auto 且宽度只有卡片那么宽。宽度 = 叶子数 * SLOT + 180，fib(5) 有 8 个叶子即约 1220px，fib(10) 更宽，所以活动节点几乎总会横向（深层时还有纵向）滚出视野；而全项目没有任何自动滚动逻辑（全 src 搜 scrollIntoView 为 0 处）。
+**修复**：CallTreeGraph 加 scrollRef，useEffect 里按当前 activeCallId 找到对应节点坐标，仅在越界时（留 18px 边距）横向/纵向 scrollTo 到可见位置（behavior smooth）。依赖为 activeCallId / nodes.length / width / height / NW / NH，全是数字，不会触发渲染循环。
+**顺带修复**：CodeEditor 的当前执行行此前只 dispatch 高亮、从不滚动，行滚出编辑器可视区后就看不到执行位置了；现在追加 EditorView.scrollIntoView(line.from, { y: 'nearest', yMargin: 40 })，仅在越界时滚动。
+**顺带修复（环境）**：vite.config.ts 的 watch.ignored 原先只排除 **/*.tmp（小写），Windows 下编辑器原子写入会留下 CodeEditor.tsx~RFxxxx.TMP，被 watcher 监听后 dev server 直接以 EBUSY 崩溃（也解释了此前编辑文件时的 ReplaceFileW EIO 1175）。已补 **/*.TMP 与 **/*~*。
+**验证**：npm run build exit 0；dev 探 http://localhost:5173/ 200。
+
+

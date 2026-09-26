@@ -20,6 +20,9 @@ export interface FunctionParam {
   name: string
   type: Type
   byRef?: boolean
+  // 形参写成 int a[] 形式：按「共享/别名」绑定调用方的数组（等同 C++ 的数组退化指针），不是拷贝。
+  // 声明里的长度一律忽略（与 C++ 一致），cell 自带真实形状。
+  isArray?: boolean
 }
 
 export interface StructDef {
@@ -72,6 +75,8 @@ export type Stmt =
   | { kind: 'if'; line: number; cond: Expr; then: Stmt; else?: Stmt }
   | { kind: 'for'; line: number; init?: Stmt; cond?: Expr; incr?: Expr; body: Stmt }
   | { kind: 'while'; line: number; cond: Expr; body: Stmt }
+  // condLine = while 关键字所在行（快照要在「body 跑完、尚未求值条件」时高亮这一行）
+  | { kind: 'do'; line: number; condLine: number; cond: Expr; body: Stmt }
   | { kind: 'break'; line: number }
   | { kind: 'continue'; line: number }
   | { kind: 'return'; line: number; value?: Expr }

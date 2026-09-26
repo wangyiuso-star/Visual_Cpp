@@ -27,7 +27,9 @@ body {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+  row-gap: 8px;
   padding: 10px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
@@ -250,7 +252,7 @@ body {
 }
 .cm-line.cm-active-line { background: var(--line-hl); }
 
-.viz-body { flex: 1; overflow: auto; padding: 16px; }
+.viz-body { flex: 1; overflow: auto; padding: 16px; container-type: inline-size; }
 .viz-empty { color: var(--muted); font-size: 13px; padding: 24px 16px; line-height: 1.8; }
 .viz-split { display: flex; align-items: flex-start; gap: 18px; }
 .viz-main {
@@ -262,7 +264,7 @@ body {
   align-items: start;
 }
 .shape-square { grid-column: span 1; }
-.shape-horizontal { grid-column: span 2; }
+.shape-horizontal { grid-column: 1 / -1; }
 .reorder-btns { margin-left: 8px; display: inline-flex; gap: 2px; }
 .reorder-btn { cursor: pointer; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; font-size: 11px; line-height: 1.1; padding: 2px 5px; }
 .reorder-btn:hover { color: var(--accent); border-color: var(--accent); }
@@ -289,6 +291,21 @@ body {
 .scalar-var.read { border-color: var(--read); box-shadow: 0 0 0 2px rgba(79, 140, 255, .30); }
 .scalar-var.write { border-color: var(--write); box-shadow: 0 0 0 2px rgba(61, 220, 132, .35); animation: pop .45s; }
 .scalar-var.judge { border-color: #ff9d4d; box-shadow: 0 0 0 2px rgba(255, 157, 77, .38); animation: judgepop .45s; }
+/* 自定义比较函数排序的统计（比较次数是刻意可见的教学点） */
+.sort-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(79, 140, 255, .4);
+  background: rgba(79, 140, 255, .08);
+  font-size: 12.5px;
+}
+.sort-banner .sort-label { color: var(--accent); font-weight: 700; }
+.sort-banner .sort-text { color: var(--text); font-family: "Cascadia Code", Consolas, monospace; }
+.sort-banner .sort-warn { margin-left: auto; color: #ff9d4d; font-weight: 700; white-space: nowrap; }
 .cond-banner {
   display: flex;
   align-items: center;
@@ -329,6 +346,20 @@ body {
 }
 .scope-global { background: rgba(255, 213, 77, .18); color: #ffd54d; }
 .scope-local { background: rgba(79, 140, 255, .18); color: #8ab4ff; }
+/* 「参数（别名）」徽章：让引用/数组形参在面板上可辨识（学生才知道它同时是别名） */
+.alias-badge {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+  letter-spacing: .02em;
+  vertical-align: middle;
+  white-space: nowrap;
+  background: rgba(163, 113, 247, .18);
+  color: #b98cff;
+}
 .var-type { color: var(--muted); font-size: 11px; margin-left: 7px; font-weight: 400; font-family: inherit; }
 
 .cells { display: flex; flex-wrap: wrap; align-items: flex-start; }
@@ -412,7 +443,7 @@ body {
 .pair-view { display: flex; align-items: center; gap: 6px; }
 .pair-paren, .pair-comma { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; }
 .pqueue-top-badge { color: #ffd54d; font-size: 9px; font-weight: 700; text-align: center; margin-bottom: 2px; }
-.tree-scroll { overflow: auto; max-width: 100%; max-height: 320px; }
+.tree-scroll { overflow: auto; max-width: 100%; max-height: min(62vh, 560px); }
 .tree-graph { position: relative; }
 .tree-svg { position: absolute; top: 0; left: 0; pointer-events: none; }
 .tree-svg line { stroke: var(--border); stroke-width: 1.5px; }
@@ -427,20 +458,20 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 5px 8px;
+  padding: .42em .67em;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel2);
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 12px;
+  font-size: 1em;
   color: var(--text);
   transition: opacity .15s;
 }
 .call-node.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79, 140, 255, .4); }
 .call-node.returned { opacity: .45; }
 .call-label { white-space: nowrap; }
-.call-locals { color: var(--muted); font-size: 10px; margin-top: 3px; line-height: 1.45; text-align: center; }
-.call-return { color: var(--muted); font-size: 10px; margin-top: 2px; }
+.call-locals { color: var(--muted); font-size: .84em; margin-top: .25em; line-height: 1.45; text-align: center; }
+.call-return { color: var(--muted); font-size: .84em; margin-top: .17em; }
 .nested { display: flex; flex-direction: column; gap: 6px; }
 .nested-row { display: flex; align-items: flex-start; }
 .nested-label {
@@ -515,3 +546,96 @@ body {
   color: var(--text);
 }
 .output pre.error { color: #ff7b72; }
+/* ===== 窄屏 / 笔记本适配 =====
+   右侧面板宽度不足时，两列网格会把数组挤成多行、卡片被撑得又高又窄；
+   这里按可视宽度自动退化为单列并收紧格子尺寸。 */
+@media (max-width: 1440px) {
+  .topbar { padding: 8px 12px; gap: 8px; row-gap: 6px; }
+  .btn { padding: 6px 11px; font-size: 12px; }
+  .viz-body { padding: 12px; }
+  .viz-split { gap: 12px; }
+  .viz-main { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .var { margin-bottom: 14px; }
+  .cell { min-width: 30px; min-height: 30px; padding: 4px 7px; font-size: 12px; }
+  .cell.scalar { min-width: 56px; }
+}
+@media (max-width: 1180px) {
+  .topbar { padding: 7px 10px; gap: 6px; row-gap: 6px; }
+  .btn { padding: 5px 9px; font-size: 12px; }
+  .btn-sm { padding: 4px 8px; }
+  .brand { font-size: 14px; margin-right: 2px; }
+  .speed-slider { width: 64px; }
+  .speed-label { min-width: 38px; }
+  .jump-input { width: 54px; }
+  .step-badge { font-size: 11px; }
+  .viz-scalars { flex: 0 0 96px; }
+  .cell { min-width: 26px; min-height: 26px; padding: 3px 6px; font-size: 12px; }
+  .cell.scalar { min-width: 48px; }
+  .var-name { font-size: 12px; margin-bottom: 5px; }
+}
+@media (max-width: 980px) {
+  .viz-split { flex-direction: column; align-items: stretch; }
+  .viz-scalars { flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .scalar-var { flex: 1 1 72px; padding: 6px 4px; }
+  .scalar-var .sv-name { font-size: 10px; }
+  .scalar-var .sv-value { font-size: 13px; }
+}
+/* 右侧面板被手动拖窄时同样退化为单列（容器查询，浏览器支持时生效） */
+@container (max-width: 680px) {
+  .viz-main { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ===== 调用树：缩放工具条 + 放大到整屏 ===== */
+.tree-wrap { display: flex; flex-direction: column; min-height: 0; }
+.tree-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.mini-btn {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 3px 7px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.mini-btn:hover { color: var(--accent); border-color: var(--accent); }
+.mini-btn.on { color: var(--accent); border-color: var(--accent); background: rgba(79, 140, 255, .14); }
+.tree-zoom-label {
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* 放大到整屏：portal 到 body，既不受 .viz-body 的 overflow 裁切，
+   也不受其 container-type 产生的 layout containment 影响。 */
+.tree-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(6, 9, 13, .74);
+  padding: 18px;
+  display: flex;
+}
+.tree-overlay-card {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+}
+.tree-overlay-head { display: flex; align-items: center; margin-bottom: 8px; }
+.tree-overlay-title {
+  color: var(--yellow);
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  font-weight: 600;
+  font-size: 13px;
+}
+.tree-overlay .tree-scroll { flex: 1; min-height: 0; max-height: none; }
+/* 数据树节点：尺寸/字号跟随缩放（.cell 里写死的字号与内边距要在这里改回可继承） */
+.tree-graph .tree-node { font-size: 1em; padding: .46em .69em; }
+.tree-graph .tree-root-label { font-size: .7em; margin-bottom: .2em; }
+

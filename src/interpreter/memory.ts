@@ -35,6 +35,9 @@ export interface VarView {
   name: string
   cell: Cell
   scope: 'global' | 'local'
+  // 这个变量是「引用参数 / 数组参数」（原来是一个 ref cell，dump 时已被解引用）。
+  // 面板靠它给卡片打「参数（别名）」徽章——学生才知道 a 既是一个名字、也是别名的。
+  alias?: boolean
 }
 
 // 结构共享（写时复制）核心：按路径定位 / 不可变更新，只复制改动路径、共享未改子树。
@@ -140,6 +143,17 @@ export class Memory {
     const neu = fn(getAtPath(root, path))
     this.vars.set(name, setAtPath(root, path, neu))
     return neu
+  }
+
+  // 写时复制：把 string 的第 idx 个字符替换为 value 的首字符。
+  setStringChar(name: string, path: number[], idx: number, value: ScalarValue): void {
+    const root = this.vars.get(name)!
+    const leaf = getAtPath(root, path)
+    if (leaf.kind !== 'scalar' || leaf.type !== 'string') throw new Error('setStringChar: 目标不是 string')
+    const s = (leaf.value ?? '') as string
+    const ch = String(value).charAt(0)
+    const ns = s.slice(0, idx) + ch + s.slice(idx + 1)
+    this.vars.set(name, setAtPath(root, path, { ...leaf, value: ns }))
   }
 
   dump(): VarView[] {

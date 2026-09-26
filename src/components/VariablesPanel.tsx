@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { Snapshot, CallNode } from '../interpreter/interpreter'
 import type { VarView, Cell, ScalarValue, BstNode } from '../interpreter/memory'
 import type { Type } from '../interpreter/ast'
 
 const WIN_1D = 10
 const WIN_2D = 5
+// 调用树缩放范围
+const TREE_Z_MIN = 0.3
+const TREE_Z_MAX = 2
 
 function formatScalar(type: string, value: ScalarValue | null): string {
   if (value === null) return '?'
@@ -50,11 +55,14 @@ function kindPriority(cell: Cell): number {
 // 形状分类：大矩形 / 竖长条 / 横长条
 function shapeClass(cell: Cell): string {
   const k = cell.kind
+  if (k === 'scalar' && cell.type === 'string') return 'shape-horizontal'
   if (k === 'queue' || k === 'deque' || k === 'set' || k === 'map' || k === 'umap') return 'shape-horizontal'
   if (k === 'array' || k === 'vector') {
     return cell.elemType.kind === 'scalar' ? 'shape-horizontal' : 'shape-square'
   }
-  return 'shape-square' // tree/bst/pqueue/stack/pair
+  // 树 / 堆（堆也画成完全二叉树）与调用树同样占满整行，避免被半宽挤成"小窗口"
+  if (k === 'tree' || k === 'bst' || k === 'pqueue') return 'shape-horizontal'
+  return 'shape-square' // stack/pair
 }
 
 type PanelItem = { kind: 'calltree' } | { kind: 'container'; v: VarView }
@@ -107,6 +115,7 @@ function typeShape(t: Type): string {
 }
 
 function cellLabel(cell: Cell): string {
+  if (cell.kind === 'scalar' && cell.type === 'string') return 'string · 长度 ' + String(cell.value ?? '').length
   if (cell.kind === 'scalar') return cell.type
   if (cell.kind === 'array') {
     let c: Cell | undefined = cell
@@ -181,8 +190,8 @@ export default function VariablesPanel({ snapshot }: Props) {
     if (r.path.length >= 1 && !focusMap[r.name]) focusMap[r.name] = r.path
   }
 
-  const containers = snapshot.vars.filter((v) => v.cell.kind !== 'scalar')
-  const scalars = snapshot.vars.filter((v) => v.cell.kind === 'scalar')
+  const containers = snapshot.vars.filter((v) => v.cell.kind !== 'scalar' || (v.cell.kind === 'scalar' && v.cell.type === 'string'))
+  const scalars = snapshot.vars.filter((v) => v.cell.kind === 'scalar' && v.cell.type !== 'string')
   const hasCallTree = !!(snapshot.callTree && snapshot.callTree.children.length > 0)
   const defaultItems: PanelItem[] = []
   if (hasCallTree) defaultItems.push({ kind: 'calltree' })
@@ -210,6 +219,15 @@ export default function VariablesPanel({ snapshot }: Props) {
 
   return (
     <div className="viz-body">
+      {snapshot.sortInfo && (
+        <div className="sort-banner">
+          <span className="sort-label">排序</span>
+          <span className="sort-text">
+            {snapshot.sortInfo.name} · 比较 {snapshot.sortInfo.comparisons} 次 · n = {snapshot.sortInfo.n}
+          </span>
+          {snapshot.sortInfo.warned && <span className="sort-warn">⚠ 比较函数不满足严格弱序</span>}
+        </div>
+      )}
       {snapshot.condition && (
         <div className="cond-banner">
           <span className="cond-label">判断</span>
@@ -227,7 +245,7 @@ export default function VariablesPanel({ snapshot }: Props) {
             {items.map((item) => {
               if (item.kind === 'calltree') {
                 return (
-                  <div className="calltree-section shape-square" key="calltree">
+                  <div className="calltree-section shape-horizontal" key="calltree">
                     <div className="calltree-title" onClick={() => setTreeCollapsed((t) => !t)}>
                       <span className="caret">{treeCollapsed ? '▸' : '▾'}</span>
                       递归树 / 调用树
@@ -295,6 +313,7 @@ function ScalarVar({
       <div className="sv-name">
         {v.name}
         <span className={'scope-badge ' + (v.scope === 'global' ? 'scope-global' : 'scope-local')}>{v.scope}</span>
+        {v.alias && <span className="alias-badge" title="这是引用参数：与调用方的变量共用同一份数据">别名</span>}
       </div>
       <div className="sv-value">{formatScalar(cell.type, cell.value)}</div>
     </div>
@@ -330,6 +349,11 @@ function VarItem({
         <span className="caret">{collapsed ? '▸' : '▾'}</span>
         {v.name}
         <span className={'scope-badge ' + (v.scope === 'global' ? 'scope-global' : 'scope-local')}>{v.scope}</span>
+        {v.alias && (
+          <span className="alias-badge" title="这是引用/数组形参：与调用方的变量共用同一份数据">
+            参数（别名）
+          </span>
+        )}
         <span className="var-type">{cellLabel(v.cell)}</span>
         <span className="reorder-btns">
           <button className="reorder-btn" title="上移" onClick={(e) => { e.stopPropagation(); onMove(-1) }}>↑</button>
@@ -360,6 +384,10 @@ function CellNode({
   focus: number[] | undefined
   vars: VarView[]
 }) {
+  if (cell.kind === 'scalar' && cell.type === 'string') {
+    return <StringView name={name} path={path} cell={cell} reads={reads} writes={writes} judges={judges} />
+  }
+
   if (cell.kind === 'scalar') {
     const cls =
       'cell scalar' +
@@ -414,6 +442,46 @@ function cellCls(
     'cell' +
     (sub.kind === 'scalar' && sub.value === null ? ' uninit' : '') +
     (isHit(judges, name, p) ? ' judge' : isHit(writes, name, p) ? ' write' : isHit(reads, name, p) ? ' read' : '')
+  )
+}
+
+function StringView({
+  name,
+  path,
+  cell,
+  reads,
+  writes,
+  judges,
+}: {
+  name: string
+  path: number[]
+  cell: Cell
+  reads: Set<string>
+  writes: Set<string>
+  judges: Set<string>
+}) {
+  const c = cell.kind === 'scalar' && cell.type === 'string' ? cell : null
+  if (!c) return null
+  const s = (c.value ?? '') as string
+  if (s.length === 0) {
+    return (
+      <div className="viz-empty" style={{ padding: '4px 0' }}>
+        (空)
+      </div>
+    )
+  }
+  return (
+    <div className="cells">
+      {s.split('').map((ch, i) => {
+        const p = path.concat(i)
+        const chCell: Cell = { kind: 'scalar', type: 'char', value: ch }
+        return (
+          <div className="cell-wrap" key={i}>
+            <div className={cellCls(chCell, name, p, judges, writes, reads)}>{ch}</div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -1055,20 +1123,230 @@ function layoutCallTree(root: CallNode) {
   return { nodes, edges, pos, leafCol, maxDepth }
 }
 
+// ===== 树形视图通用：缩放 / 自动适应 / 放大整屏 / 跟随 =====
+// 量取可视区宽度，高度预算由窗口推算——刻意不测量自身高度，
+// 否则会变成"量自身→改缩放→再量自身"的抖动循环。
+function useTreeViewport(baseWidth: number, baseHeight: number) {
+  const [zoom, setZoom] = useState(1)
+  const [auto, setAuto] = useState(false)
+  const [magnified, setMagnified] = useState(false)
+  const [vw, setVw] = useState(0)
+  const [vh, setVh] = useState(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const measure = () => {
+      const el = scrollRef.current
+      setVw(el ? el.clientWidth : 0)
+      setVh(magnified ? Math.max(240, window.innerHeight - 200) : Math.min(Math.round(window.innerHeight * 0.62), 560))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (scrollRef.current) ro.observe(scrollRef.current)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [magnified])
+
+  useEffect(() => {
+    if (!magnified) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMagnified(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [magnified])
+
+  // 自动适应：求能放下整棵树的缩放比，向下取 0.05 步长（避免抖动）
+  const fitZoom = vw > 0 && vh > 0 ? Math.min(vw / baseWidth, vh / baseHeight) : 1
+  const z = auto ? Math.max(TREE_Z_MIN, Math.min(1, Math.floor(fitZoom * 20) / 20)) : zoom
+  return {
+    z,
+    auto,
+    setAuto,
+    magnified,
+    setMagnified,
+    scrollRef,
+    bump(delta: number) {
+      setAuto(false)
+      setZoom(Math.max(TREE_Z_MIN, Math.min(TREE_Z_MAX, Math.round((z + delta) * 20) / 20)))
+    },
+    reset() {
+      setAuto(false)
+      setZoom(1)
+    },
+  }
+}
+
+function TreeViewport({
+  vp,
+  title,
+  extra,
+  follow,
+  children,
+}: {
+  vp: ReturnType<typeof useTreeViewport>
+  title: string
+  extra?: ReactNode
+  follow?: { x: number; y: number; w: number; h: number } | null
+  children: ReactNode
+}) {
+  const { z, auto, setAuto, magnified, setMagnified, scrollRef, bump, reset } = vp
+
+  // 自动跟随：仅在目标越出可视区时滚动（留 18px 边距）
+  const fx = follow ? follow.x : undefined
+  const fy = follow ? follow.y : undefined
+  const fw = follow ? follow.w : undefined
+  const fh = follow ? follow.h : undefined
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || fx === undefined || fy === undefined || fw === undefined || fh === undefined) return
+    const M = 18
+    let left = el.scrollLeft
+    let top = el.scrollTop
+    if (fx - M < left) left = Math.max(0, fx - M)
+    else if (fx + fw + M > left + el.clientWidth) left = fx + fw + M - el.clientWidth
+    if (fy - M < top) top = Math.max(0, fy - M)
+    else if (fy + fh + M > top + el.clientHeight) top = fy + fh + M - el.clientHeight
+    if (Math.abs(left - el.scrollLeft) > 0.5 || Math.abs(top - el.scrollTop) > 0.5) {
+      el.scrollTo({ left, top, behavior: 'smooth' })
+    }
+  }, [fx, fy, fw, fh, magnified])
+
+  const bar = (
+    <div className="tree-bar">
+      {extra}
+      <button className="mini-btn" onClick={() => bump(-0.1)} title="缩小">−</button>
+      <span className="tree-zoom-label">{Math.round(z * 100)}%</span>
+      <button className="mini-btn" onClick={() => bump(0.1)} title="放大">＋</button>
+      <button className={'mini-btn' + (auto ? ' on' : '')} onClick={() => setAuto((a) => !a)} title="自动缩放到能放下整棵树">
+        适应
+      </button>
+      <button className="mini-btn" onClick={reset} title="恢复 100%">1:1</button>
+      <span className="spacer" />
+      <button className="mini-btn" onClick={() => setMagnified((m) => !m)} title="放大到整屏（Esc 退出）">
+        {magnified ? '还原' : '放大'}
+      </button>
+    </div>
+  )
+
+  const body = (
+    <div className="tree-scroll" ref={scrollRef}>
+      {children}
+    </div>
+  )
+
+  if (!magnified) {
+    return (
+      <div className="tree-wrap">
+        {bar}
+        {body}
+      </div>
+    )
+  }
+
+  // 放大：portal 到 document.body —— 既不受 .viz-body 的 overflow 裁切，
+  // 也不受其 container-type 产生的 layout containment（会成为 fixed 后代的包含块）影响。
+  return createPortal(
+    <div className="tree-overlay">
+      <div className="tree-wrap tree-overlay-card">
+        <div className="tree-overlay-head">
+          <span className="tree-overlay-title">{title}</span>
+          <span className="spacer" />
+          <button className="mini-btn" onClick={() => setMagnified(false)}>关闭 (Esc)</button>
+        </div>
+        {bar}
+        {body}
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+// 从根到指定调用节点的路径（用于「调用栈」视图）
+function pathToNode(root: CallNode, id: number): CallNode[] {
+  if (root.id === id) return [root]
+  for (const c of root.children) {
+    const p = pathToNode(c, id)
+    if (p.length > 0) return [root, ...p]
+  }
+  return []
+}
+
 function CallTreeGraph({ root, activeCallId }: { root: CallNode; activeCallId: number }) {
-  const { nodes, edges, pos, leafCol, maxDepth } = layoutCallTree(root)
-  const SLOT = 130
-  const DH = 76
-  const NW = 110
-  const NH = 40
+  const [mode, setMode] = useState<'tree' | 'stack'>('tree')
+  // 视图模式：完整树 / 只显示当前调用路径（宽度只与深度有关，深递归也不会横向爆炸）
+  const activePath = mode === 'stack' ? pathToNode(root, activeCallId) : []
+  const nodes: { col: number; depth: number; node: CallNode }[] = []
+  const edges: { from: number; to: number }[] = []
+  let leafCol = 1
+  let maxDepth = 0
+  if (mode === 'stack') {
+    activePath.forEach((n, d) => nodes.push({ col: 0, depth: d, node: n }))
+    for (let i = 1; i < activePath.length; i++) edges.push({ from: activePath[i - 1].id, to: activePath[i].id })
+    maxDepth = Math.max(0, activePath.length - 1)
+  } else {
+    const lay = layoutCallTree(root)
+    for (const n of lay.nodes) nodes.push({ col: n.col, depth: n.depth, node: n.node })
+    for (const e of lay.edges) edges.push({ from: e.from, to: e.to })
+    leafCol = lay.leafCol
+    maxDepth = lay.maxDepth
+  }
+  const pos = new Map<number, { col: number; depth: number }>()
+  for (const n of nodes) pos.set(n.node.id, { col: n.col, depth: n.depth })
+
+  // 基准几何始终按「完整内容」算（含局部变量），只用于自动适应与 100% 下的尺寸；
+  // LOD 只影响实际渲染、不参与缩放求解，避免"缩小→隐藏内容→变矮→再改缩放"的抖动。
+  let maxChars = 4
+  let baseLines = 0
+  for (const item of nodes) {
+    const nd = item.node
+    maxChars = Math.max(maxChars, nd.label.length)
+    for (const lv of nd.locals) maxChars = Math.max(maxChars, (lv.name + " = " + lv.value).length)
+    baseLines = Math.max(baseLines, nd.locals.length + (nd.returned && nd.returnValue !== null ? 1 : 0))
+  }
+  const baseSLOT = Math.min(300, Math.max(130, Math.round(maxChars * 7.6) + 28))
+  const baseNH = 30 + baseLines * 15
+  const baseDH = baseNH + 36
+  const baseWidth = Math.max(1, leafCol) * baseSLOT + 180
+  const baseHeight = (maxDepth + 1) * baseDH + baseNH
+
+  const vp = useTreeViewport(baseWidth, baseHeight)
+  const z = vp.z
+  // LOD：缩得太小就隐藏局部变量与返回值，避免糊成一团
+  const lod = z < 0.7
+  const unitNH = lod ? 30 : baseNH
+  const unitDH = unitNH + 36
+
+  const SLOT = baseSLOT * z
+  const NW = Math.max(40, SLOT - 20 * z)
+  const NH = unitNH * z
+  const DH = unitDH * z
   const px = (c: number) => c * SLOT
   const py = (d: number) => d * DH
-  const width = Math.max(1, leafCol) * SLOT + 180
-  const height = (maxDepth + 1) * DH + NH
+  const width = baseWidth * z
+  const height = ((maxDepth + 1) * unitDH + unitNH) * z
+  const hit = nodes.find((it) => it.node.id === activeCallId)
+  const follow = hit ? { x: px(hit.col), y: py(hit.depth), w: NW, h: NH } : null
 
   return (
-    <div className="tree-scroll">
-      <div className="tree-graph" style={{ width, height }}>
+    <TreeViewport
+      vp={vp}
+      title={'调用树 · ' + (mode === 'stack' ? '当前调用栈' : '完整树')}
+      follow={follow}
+      extra={
+        <button
+          className="mini-btn"
+          onClick={() => setMode((m) => (m === 'stack' ? 'tree' : 'stack'))}
+          title="完整树 / 仅当前调用路径"
+        >
+          {mode === 'stack' ? '调用栈' : '完整树'}
+        </button>
+      }
+    >
+      <div className="tree-graph" style={{ width, height, fontSize: 12 * z + 'px' }}>
         <svg className="tree-svg" width={width} height={height}>
           {edges.map((ed, i) => {
             const a = pos.get(ed.from)!
@@ -1083,7 +1361,7 @@ function CallTreeGraph({ root, activeCallId }: { root: CallNode; activeCallId: n
             <div className="call-node-wrap" style={{ left: px(col), top: py(depth), minWidth: NW, minHeight: NH }} key={node.id}>
               <div className={cls}>
                 <div className="call-label">{node.label}</div>
-                {node.locals.length > 0 && (
+                {!lod && node.locals.length > 0 && (
                   <div className="call-locals">
                     {node.locals.map((l, i) => (
                       <div key={i}>
@@ -1092,13 +1370,13 @@ function CallTreeGraph({ root, activeCallId }: { root: CallNode; activeCallId: n
                     ))}
                   </div>
                 )}
-                {node.returned && node.returnValue !== null && <div className="call-return">return {node.returnValue}</div>}
+                {!lod && node.returned && node.returnValue !== null && <div className="call-return">return {node.returnValue}</div>}
               </div>
             </div>
           )
         })}
       </div>
-    </div>
+    </TreeViewport>
   )
 }
 
@@ -1119,18 +1397,33 @@ function TreeGraph({
 }) {
   const { nodes, edges, pos, colCount, maxDepth } = layoutTree(root)
   const maxValLen = nodes.reduce((m, n) => Math.max(m, n.node.value.length), 0)
-  const W = Math.max(44, maxValLen * 8 + 20)
-  const H = 34
-  const HG = 14
-  const VG = 26
+  const baseW = Math.max(44, maxValLen * 8 + 20)
+  const H0 = 34
+  const HG0 = 14
+  const VG0 = 26
+  const baseWidth = colCount * (baseW + HG0) + baseW
+  const baseHeight = (maxDepth + 1) * (H0 + VG0)
+
+  const vp = useTreeViewport(baseWidth, baseHeight)
+  const z = vp.z
+  const W = baseW * z
+  const H = H0 * z
+  const HG = HG0 * z
+  const VG = VG0 * z
   const px = (c: number) => c * (W + HG)
   const py = (d: number) => d * (H + VG)
-  const width = colCount * (W + HG) + W
-  const height = (maxDepth + 1) * (H + VG)
+  const width = baseWidth * z
+  const height = baseHeight * z
+
+  // 跟随本步被读写的节点（写优先），与调用树同一套跟随逻辑
+  const followNode =
+    nodes.find((n) => isHit(writes, name, n.node.path)) ??
+    nodes.find((n) => isHit(reads, name, n.node.path) || isHit(judges, name, n.node.path))
+  const follow = followNode ? { x: px(followNode.col), y: py(followNode.depth), w: W, h: H } : null
 
   return (
-    <div className="tree-scroll">
-      <div className="tree-graph" style={{ width, height }}>
+    <TreeViewport vp={vp} title={name} follow={follow}>
+      <div className="tree-graph" style={{ width, height, fontSize: 13 * z + 'px' }}>
         <svg className="tree-svg" width={width} height={height}>
           {edges.map((ed, i) => {
             const a = pos.get(ed.from)!
@@ -1146,12 +1439,12 @@ function TreeGraph({
           return (
             <div className="tree-node-wrap" style={{ left: px(col), top: py(depth) }} key={node.key}>
               {depth === 0 && rootLabel && <div className="tree-root-label">{rootLabel}</div>}
-              <div className={cls} style={{ width: W, minWidth: W, whiteSpace: 'nowrap' }}>{node.value}</div>
+              <div className={cls} style={{ width: W, minWidth: W, height: H, minHeight: H, whiteSpace: 'nowrap' }}>{node.value}</div>
             </div>
           )
         })}
       </div>
-    </div>
+    </TreeViewport>
   )
 }
 

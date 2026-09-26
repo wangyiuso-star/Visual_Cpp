@@ -40,6 +40,18 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] struct + 容器参数 + 引用传递 + 结构体返回值 —— 已做（struct 定义/成员读写/初始化、int& 引用传递、容器按值参数、struct 参数/返回值；另支持 array/tree/vector 存 struct（含初始化）；test/struct-test.ts 5 项 + struct-return-test.ts 2 项 + struct-container-test.ts 4 项通过）
 - [x] 多维 vector 完善 —— 已做（vector<vector<int>> g(n, vector<int>(m)) 矩阵填充 + 结构共享隔离；int a[] = {...} 数组大小推断；test/multivec-test.ts 4 项通过）
 - [x] 常用 STL —— 已做（deque 容器 + sort/reverse/lower_bound/swap 函数；test/stl-test.ts 6 项通过）
+- [x] 笔记本 / 窄屏适配 —— 已做（右侧网格按宽度自动退化为单列 + 格子分档收紧 + topbar 换行压缩 + 调用树按标签宽度自适应间距；调用树标签改为显示真实参数值；test/calllabel-test.ts 2 项通过）
+- [x] 递归树自动跟随 —— 已做（活动调用节点自动滚进视野，含横向；编辑器当前执行行也自动滚进视野；vite watcher 忽略规则补 *.TMP/~* 避免 EBUSY 崩 dev server）
+- [x] 调用树窗口放大 / 缩放 / 调用栈视图 —— 已做（整行宽 + 高度上限 min(62vh,560px) + 工具栏 −/＋/适应/1:1/放大整屏(Esc 退出)；缩放作用于 SLOT/NH/DH 与字号；z<0.7 触发 LOD；「调用栈」模式宽度由 O(叶子数) 降为 O(深度)）
+- [x] 数据结构的树（tree / BST / 堆）同等能力 —— 已做（抽出共享 useTreeViewport + TreeViewport，调用树与数据树共用缩放/自动适应/放大整屏/跟随；放大改用 createPortal 到 body；数据树额外跟随本步读写节点）
+- [x] 语言子集相容性矩阵 + 两个内建 bug 修复 —— 已做（test/compat-test.ts 44 项断言；修 lower_bound(v,x) 二参崩溃、sort 第三参静默忽略、迭代器形式误导报错；新增 test/presets-test.ts 逐个跑 preset）
+- [x] do-while（含「body 跑完、检查条件前」的关键快照）+ 数组形参（共享/别名语义）—— 已做（test/do-while-test.ts 14 项、test/arrayparam-test.ts 11 项；容器形参仍按值拷贝，有回归断言）
+- [x] 渲染层验证 —— 已做（test/render-test.ts：react-dom/server 把 VariablesPanel 渲染成 HTML，逐个 preset 断言不崩/非空壳/关键结构齐全）
+- [x] 自定义比较函数排序 —— 已做（sort(v,cmp)/sort(v,n,cmp)，手写稳定归并排序，面板显示比较次数，违反严格弱序会警告；元素支持标量/struct/pair；test/sortcmp-test.ts 24 项）
+- [x] 数组形参边界 —— 已做（非数组实参给明确错误；全域阵列实参时别名与本体同屏可见）
+- [x] HKOI 教学项目 preset 验证 —— 已做（test/hkoi-presets-test.ts 直接引用对方 presets.ts 的 21 个 preset，执行+渲染+视觉断言 60 项全过）
+- [x] 参数（别名）徽章 —— 已做（VarView.alias + .alias-badge；卡片与纯量栏都标；**刻意不改写入高亮**，test/aliasbadge-test.ts 9 项锁定）
+- [x] 发布 v0.2.0 —— package.json 0.2.0 + git tag v0.2.0（含三项课堂安全修正）
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

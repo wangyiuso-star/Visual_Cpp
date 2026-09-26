@@ -104,8 +104,12 @@ export default function CodeEditor({ value, onChange, activeLine, breakpoints, o
 
   useEffect(() => {
     const view = ref.current?.view
-    if (view) {
-      view.dispatch({ effects: setActiveLine.of(activeLine) })
+    if (!view) return
+    view.dispatch({ effects: setActiveLine.of(activeLine) })
+    // 跟随当前执行行：高亮了但可能滚在可视区外，这里把它滚进视野（仅在越界时滚动）
+    if (activeLine >= 1 && activeLine <= view.state.doc.lines) {
+      const line = view.state.doc.line(activeLine)
+      view.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: 'nearest', yMargin: 40 }) })
     }
   }, [activeLine])
 
