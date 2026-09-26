@@ -4,3 +4,5 @@ dist/
 .tmp/
 test/*.cjs
 test/*.mjs
+# 診斷/臨時腳本放這裡（test/ 底下每個 .ts 都會被 npm test 當成測試檔）
+tmp/

@@ -23,6 +23,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - 验证：改后 npm run build 应 exit 0 → 重启 dev → Invoke-WebRequest 探 200。
 - 编辑约定：edit/write 前必须先 read（fs-observation 策略）。tools.write 用 String.raw 保留换行，避免反引号与美元花括号插值冲突。
 - 响应语言：中文。
+- **診斷/臨時腳本約定**：test/ 底下**每個 .ts 都會被 npm test 當成測試檔**，所以診斷腳本請放 `tmp/`（已 gitignore）或加 `_` 前綴（scripts/run-tests.mjs 會忽略 `_` 開頭的檔案，並列出被忽略者）。
 
 ## 已完成（简述）
 - 语言：int/long long/char/bool/string/double/float；数组(1D/2D)、vector(1D/2D/邻接表)、stack、queue、priority_queue(大根堆+greater 小根堆)、tree(完全二叉树)、bst。

@@ -5,9 +5,16 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 
 const dir = 'test'
-const files = readdirSync(dir).filter((f) => f.endsWith('.ts')).sort()
+// test/ 底下每個 *.ts 都會被當成測試檔；診斷/臨時腳本請放 tmp/ 或加 _ 前綴（會被這裡忽略）。
+const all = readdirSync(dir).filter((f) => f.endsWith('.ts'))
+const files = all.filter((f) => !f.startsWith('_')).sort()
+const ignored = all.filter((f) => f.startsWith('_')).sort()
 const isWin = process.platform === 'win32'
 const rolldown = join('node_modules', '.bin', isWin ? 'rolldown.cmd' : 'rolldown')
+
+if (ignored.length > 0) {
+  console.log('（忽略 ' + ignored.length + ' 個 _ 前綴檔案：' + ignored.join(', ') + '）')
+}
 
 let failed = 0
 let skipped = 0

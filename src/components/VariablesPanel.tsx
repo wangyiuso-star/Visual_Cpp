@@ -313,7 +313,7 @@ function ScalarVar({
       <div className="sv-name">
         {v.name}
         <span className={'scope-badge ' + (v.scope === 'global' ? 'scope-global' : 'scope-local')}>{v.scope}</span>
-        {v.alias && <span className="alias-badge" title="这是引用参数：与调用方的变量共用同一份数据">别名</span>}
+        {v.alias && <span className="alias-badge" title="这是引用参数：与调用方的变量共用同一份数据">参数（别名）</span>}
       </div>
       <div className="sv-value">{formatScalar(cell.type, cell.value)}</div>
     </div>

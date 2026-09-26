@@ -1,6 +1,10 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-16：**v0.2.1** —— 徽章文字統一。
+  - 純量欄的徽章原本是短版「别名」（當初怕在 116px 窄欄換行），但卡片是「參數（別名）」，造成教材編輯那張四列表（純量/string/vector/array）**出現一致、文字卻不一致**。對方量過 `.alias-badge` 為 8px 字級、「參數（別名）」6 個全形字約 56–64px、純量欄內寬約 104px，確實放得下 → 統一為「參數（別名）」。
+  - `test/aliasbadge-test.ts` 補上**文字斷言**：四種別名（int& x / string& s / vector<int>& v / int a[]）的徽章文字必須只有一種「參數（別名）」，且分佈為 rail 1 + card 3。用意是防止以後有人為了省空間又改回短版。
+  - `scripts/run-tests.mjs` 改為**忽略底線前綴**的檔案並列出被忽略者；`.gitignore` 加 `tmp/`；診斷腳本約定已寫進 AGENTS.md。起因：我之前把兩個診斷腳本 `badge-check.ts` / `badge-check2.ts` 放進 test/，害測試檔數從 24 變 26、而且探針印出的「NO badge for …」看起來像功能壞掉。
 - 2026-08-16：**发布 v0.2.0**（含三项课堂安全修正 + do-while + 数组形参 + 自订比较函数）。
   - **数组形参徽章**：VarView 加 `alias`（dumpAll 在解引用 ref cell 前记下，ref 只可能来自引用/数组形参），卡片与纯量栏渲染「参数（别名）」徽章（index.css 的 .alias-badge）。**刻意不改写入高亮**——决策是「只亮被指向的那个名字」本身即教学证据（test/aliasbadge-test.ts 9 项把它锁住：含「亮的是 g、a 不亮」）。
   - 新增 test/aliasbadge-test.ts（9 项）。测试档共 24 个。
@@ -65,4 +69,6 @@ OI/算法教学用的 C++ 逐步可视化工具。左半 = 代码编辑器 + cin
 - 编辑器布局 bug 详见 DEBUG.md。
 - npm run typecheck 当前有约 90 个既存类型错误（interpreter.ts 71 / VariablesPanel.tsx 17 / parser.ts 1 / CodeEditor.tsx 1），全是联合类型未收窄，不影响 vite build 与运行；详见 DEBUG.md。
 - 工作区已迁移到笔记本：C:\Users\wangy\Desktop\VisualCode（旧 C:\Users\hy\... 路径作废）。
+- **除錯教訓（徽章探針事件，值得記住）**：自己寫的診斷腳本若回報「功能不見了」，**先懷疑探針的抽取邏輯，再懷疑功能**。當時 badge-check.ts 用 `class="caret">([A-Za-z_]\w*)` 抽卡片名，但實際 HTML 是 `class="caret">▾</span>a`（caret 的內容是 ▾、不是空的），所以四種別名只抓到 1 個，印出「NO badge for …」看起來像功能壞掉；換成不依賴取名的寫法（只看 alias-badge 的文字與所在容器）後立刻全數通過——**功能一直是好的**。兩個探針檔中間隔的 32 秒，就是換寫法所花的時間。
+- 另一條同類教訓：`run` 不是 throw，而是把執行期錯誤放進**最後一個快照的 `error` 欄位**，寫斷言要讀 `snapshot.error`。
 - 自动压缩 checkpoint：CHECKPOINT-2026-08-16.md

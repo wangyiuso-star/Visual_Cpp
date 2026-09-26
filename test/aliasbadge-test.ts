@@ -89,5 +89,36 @@ function insideSnap(code: string, marker: string) {
   check('vector& 引用參數：卡片有徽章', cs.some((c) => c.hasAlias), JSON.stringify(cs))
 }
 
+// ---------- 6. 徽章文字一致：四種別名都必須是「参数（别名）」----------
+// 這條是為了鎖住一致性：以後不得有人為了「省空間」把純量欄偷偷改回短版。
+{
+  const programs = [
+    'void inc(int& x){ x++; }\nint main(){ int a=5; inc(a); return 0; }\n',
+    'void bang(string& s){ s = s + "!"; }\nint main(){ string s="hi"; bang(s); return 0; }\n',
+    'void add(vector<int>& v){ v.push_back(9); }\nint main(){ vector<int> v; add(v); return 0; }\n',
+    'void f(int a[]){ a[0]=1; }\nint main(){ int b[2]={1,2}; f(b); return 0; }\n',
+  ]
+  const texts: string[] = []
+  let rail = 0
+  let card = 0
+  for (const code of programs) {
+    let snap: any = null
+    for (const s of run(parse(code), {})) if (s.vars.some((v: any) => v.alias)) snap = s
+    if (!snap) continue
+    const h = render(snap)
+    const re = /class="alias-badge"[^>]*>\s*([^<]+?)\s*</g
+    let m: RegExpExecArray | null = re.exec(h)
+    while (m) {
+      if (texts.indexOf(m[1].trim()) < 0) texts.push(m[1].trim())
+      const before = h.slice(0, m.index)
+      if (before.lastIndexOf('sv-name') > before.lastIndexOf('var-name')) rail++
+      else card++
+      m = re.exec(h)
+    }
+  }
+  check('徽章文字只有一種：参数（别名）', texts.length === 1 && texts[0] === '参数（别名）', JSON.stringify(texts))
+  check('四種別名都有徽章（1 純量欄 + 3 卡片）', rail === 1 && card === 3, 'rail=' + rail + ' card=' + card)
+}
+
 console.log('==== aliasbadge-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)
