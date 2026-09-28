@@ -110,5 +110,27 @@ err('不能对临时值调用修改方法', "int main(){ to_string(5).push_back(
 eq('find == string::npos', S('if (s.find("z")==string::npos) cout<<"nf";'), 'nf')
 eq('find != string::npos', S('if (s.find("l")!=string::npos) cout<<"found";'), 'found')
 
+// ---------- 收紧：append/insert/replace/compare 不接受单一字元 ----------
+// C++ 里这四个方法只有「字串」重载（push_back 与 += 才是吃字元的），
+// 工具以前会用 char 直接跑，会让学生学到编译不过的写法。
+err('append 拒绝字元', S("s.append('!');"), '需要字串参数')
+err('insert 拒绝字元', S("s.insert(1,'X');"), '需要字串参数')
+err('replace 拒绝字元', S("s.replace(0,1,'X');"), '需要字串参数')
+err('compare 拒绝字元', S("s.compare('a');"), '需要字串参数')
+err('append 拒绝整数', 'int main(){ string s="a"; s.append(65); return 0; }', '需要字串参数')
+eq('append 仍吃字串', S('s.append("!!"); cout<<s;'), 'hello!!')
+eq('insert 仍吃字串', S('s.insert(1,"X"); cout<<s;'), 'hXello')
+eq('replace 仍吃字串', S('s.replace(0,1,"X"); cout<<s;'), 'Xello')
+eq('compare 仍吃字串', S('cout<<s.compare("hello");'), '0')
+eq('append 配 to_string', 'int main(){ string s="n="; s.append(to_string(5)); cout<<s; return 0; }', 'n=5')
+eq('保留：push_back 吃字元（C++ 合法）', S("s.push_back('!'); cout<<s;"), 'hello!')
+eq('保留：+= 吃字元（C++ 合法）', S("s += 'x'; cout<<s;"), 'hellox')
+eq('保留：find 吃字元（C++ 有此重载）', S("cout<<s.find('l');"), '2')
+
+// ---------- substr 越界：以前静默回空字串，现在与 at 一致要报错 ----------
+err('substr 起点越界', S('cout<<s.substr(99);'), '越界')
+err('substr 起点越界(带长度)', S('cout<<s.substr(99,2);'), '越界')
+eq('substr(pos == size) 合法 → 空字串', S('cout<<"["<<s.substr(5)<<"]";'), '[]')
+
 console.log('==== strfunc-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)

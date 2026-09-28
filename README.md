@@ -110,6 +110,8 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 **内建函数**
 - `sort` / `reverse` / `lower_bound` 只接受「容器 (+ 个数)」形式：`sort(v)`、`sort(v, n)`、`reverse(v[, n])`、`lower_bound(v, x)`、`lower_bound(v, n, x)`（`v` 为数组或 vector，升序）
 - `find` / `rfind` 找不到时回 **-1**（本工具没有 `string::npos` 那个巨大值；但**接受写 `string::npos`，它等於 -1**，所以 `if (s.find(x) == string::npos)` 这种惯用写法可以跑）
+- **`append` / `insert` / `replace` / `compare` 只接受字串参数**（C++ 没有接受单一字元的重载）：`s.append('!')` 会明确报错并提示改用 `push_back` 或 `+=`。反过来，`find` / `rfind` / `push_back` / `+=` **可以吃字元**（那些在 C++ 是合法重载）
+- `substr(pos)` 在 `pos > s.size()` 时**明确报错**（与 `at` 一致；`pos == s.size()` 合法，回空字串）
 - 会改到内容的方法（`at` / `insert` / `erase` / `replace` / `resize` 等）下标越界会**明确报错**（真实 C++ 是未定义行为）
 - 不支持迭代器形式的方法重载（`insert(iter, ...)` / `erase(iter)` / `s.begin()`）
 - **支持自定义比较函数**：`sort(v, cmp)` / `sort(v, n, cmp)`（`cmp(a,b)==true` 表示 a 排前面）。内部是手写的**稳定**归并排序（不是 `Array.prototype.sort`），比较时真的调用用户的 cmp；**比较次数会显示在右侧面板顶部**（教学用，可对复杂度讨论），若 cmp 违反严格弱序会给出警告。旧版会静默忽略第 3 个参数按升序排——那个才是 bug

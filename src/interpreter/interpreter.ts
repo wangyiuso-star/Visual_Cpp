@@ -1315,6 +1315,22 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   return result ?? (resultCell ? { type: 'int', v: 0, cell: resultCell } : { type: 'int', v: 0 })
 }
 
+// append / insert / replace / compare 的参数在 C++ 里只有「字串」版本，
+// 没有接受单一字元的重载（push_back 与 += 才是吃字元的）。
+// 这里明确拒绝，避免学生学到在真实 C++ 编译不过的写法。
+function requireStringArg(rv: RV, method: string, line: number): string {
+  if (rv.type === 'char') {
+    throw new RuntimeError(
+      method + ' 需要字串参数（C++ 没有接受单一字元的 ' + method + ' 重载）；单一字元请用 push_back 或 +=',
+      line,
+    )
+  }
+  if (rv.type !== 'string') {
+    throw new RuntimeError(method + ' 需要字串参数，收到 ' + rv.type + '（可用 to_string 转成字串）', line)
+  }
+  return rv.v as string
+}
+
 // 会改到容器的那些方法：不能让它们作用在临时值上（否则改了也没人看得见）
 const MUTATING_METHODS = [
   'push_back', 'pop_back', 'push_front', 'pop_front', 'push', 'pop',
@@ -1352,9 +1368,12 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     if (method === 'substr') {
       if (expr.args.length < 1) throw new RuntimeError('substr 需要 1~2 个参数', expr.line)
       const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      // C++ 的 substr 在 pos > size() 时丢 out_of_range；以前这里静默回空字串，
+      // 与 at 的行为不一致。现在明确报错（pos == size() 合法，回空字串）。
+      if (pos < 0 || pos > s.length) throw new RuntimeError('substr 的起始位置 ' + pos + ' 越界（长度 ' + s.length + '）', expr.line)
       const len = expr.args[1] ? toIndex(yield* evalExpr(rt, expr.args[1]), expr.line) : Math.max(0, s.length - pos)
       rt.mem.logRead(obj.name, obj.path)
-      return { type: 'string', v: s.substr(pos, len) }
+      return { type: 'string', v: s.substr(pos, Math.max(0, len)) }
     }
     if (method === 'find') {
       if (expr.args.length < 1) throw new RuntimeError('find 需要 1~2 个参数 (str[, pos])', expr.line)
@@ -1404,7 +1423,7 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     }
     if (method === 'append') {
       if (expr.args.length !== 1) throw new RuntimeError('append 需要 1 个参数', expr.line)
-      const t = toStringVal(yield* evalExpr(rt, expr.args[0]), rt.boolAsInt)
+      const t = requireStringArg(yield* evalExpr(rt, expr.args[0]), method, expr.line)
       obj.mem.setScalar(obj.name, obj.path, s + t)
       rt.mem.logWrite(obj.name, obj.path)
       return { type: 'int', v: 0 }
@@ -1413,7 +1432,7 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       if (expr.args.length !== 2) throw new RuntimeError('insert 需要 2 个参数 (pos, str)', expr.line)
       const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
       if (pos < 0 || pos > s.length) throw new RuntimeError('insert 位置 ' + pos + ' 越界（长度 ' + s.length + '）', expr.line)
-      const t = toStringVal(yield* evalExpr(rt, expr.args[1]), rt.boolAsInt)
+      const t = requireStringArg(yield* evalExpr(rt, expr.args[1]), method, expr.line)
       obj.mem.setScalar(obj.name, obj.path, s.slice(0, pos) + t + s.slice(pos))
       rt.mem.logWrite(obj.name, obj.path)
       return { type: 'int', v: 0 }
@@ -1432,14 +1451,14 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
       const len = toIndex(yield* evalExpr(rt, expr.args[1]), expr.line)
       if (pos < 0 || pos > s.length) throw new RuntimeError('replace 位置 ' + pos + ' 越界（长度 ' + s.length + '）', expr.line)
-      const t = toStringVal(yield* evalExpr(rt, expr.args[2]), rt.boolAsInt)
+      const t = requireStringArg(yield* evalExpr(rt, expr.args[2]), method, expr.line)
       obj.mem.setScalar(obj.name, obj.path, s.slice(0, pos) + t + s.slice(pos + Math.max(0, len)))
       rt.mem.logWrite(obj.name, obj.path)
       return { type: 'int', v: 0 }
     }
     if (method === 'compare') {
       if (expr.args.length !== 1) throw new RuntimeError('compare 需要 1 个参数', expr.line)
-      const t = toStringVal(yield* evalExpr(rt, expr.args[0]), rt.boolAsInt)
+      const t = requireStringArg(yield* evalExpr(rt, expr.args[0]), method, expr.line)
       rt.mem.logRead(obj.name, obj.path)
       return { type: 'int', v: s < t ? -1 : s > t ? 1 : 0 }
     }

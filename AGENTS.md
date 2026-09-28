@@ -60,6 +60,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] string/vector 常用方法 + 字元函数 —— 已做（**修 find 忽略第二参的静默错误**；补 empty/at/front/back/rfind/push_back/pop_back/append/insert/erase/replace/compare 与 vector 的 front/back/at/resize/insert/erase；toupper/tolower/isdigit 等；方法可串接；string::npos = -1；test/strfunc-test.ts 58 项）
 - [x] 测试执行器加固 —— 打包失败不再一律 SKIP：相依外部档不存在才 SKIP，语法错误算 FAIL（起因：一个语法错误的测试档被 SKIP 掩盖，还跑到旧 .mjs 显示通过）
 - [x] 发布 v0.5.0 —— string/vector 方法 + 字元函数 + find 修正
+- [x] 收紧字元参数 + substr 越界 —— 已做（`append/insert/replace/compare` 只吃字串，拒绝单字元并提示用 `push_back`/`+=`；`find/rfind/push_back/+=` 保留吃字元因为是合法 C++ 重载；`substr(pos)` 越界改为明确报错，与 `at` 一致；strfunc-test 74 项）
+- [x] 发布 v0.5.1 —— 收紧字元参数 + substr 越界报错
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

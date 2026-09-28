@@ -1,6 +1,11 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-16：**v0.5.1 —— 收紧字元参数 + substr 越界报错**（延续「不要静默、不要教出编译不过的写法」）。
+  - `append / insert / replace / compare` 现在**只接受字串参数**：C++ 里这四个方法没有接受单一字元的重载，以前工具会用 char 跑（`s.append('!')`），学生学到的是**真实 C++ 编译不过**的写法。现在明确报错并提示改用 `push_back` / `+=`。
+  - 保留宽松（因为 C++ 合法）：`find / rfind`（有 `find(CharT)` 重载）、`push_back`（`push_back(CharT)`）、`+=`（`operator+=(CharT)`）。
+  - `substr(pos)` 在 `pos > s.size()` 时以前**静默回空字串**，而 `at` 同情况会报错 → 工具内部不一致；现在 substr 也明确报错（`pos == size()` 仍合法，回空字串）。
+  - `test/strfunc-test.ts` 58 → **74 项**；`test/compat-test.ts` 补 2 项。
 - 2026-08-16：**v0.5.0 —— string / vector 常用成员 + 字元函数，并修掉 `find` 的静默错误**。
   - ⚠️ **课堂安全修正**：`s.find(str, pos)` 以前**忽略第二参 pos**（`s.find("l",4)` 在 `"hello"` 上回 2，正解是找不到 → -1）。与当年 `sort` 忽略第三参同一类：静默给错答案。已修，并用测试锁住。
   - 补齐 string：`empty / at / front / back / rfind / push_back / pop_back / append / insert(pos,str) / erase(pos[,len]) / replace(pos,len,str) / compare`（`substr` 本来两形式就有）。
