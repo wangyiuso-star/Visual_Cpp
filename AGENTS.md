@@ -23,6 +23,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - 验证：改后 npm run build 应 exit 0 → 重启 dev → Invoke-WebRequest 探 200。
 - 编辑约定：edit/write 前必须先 read（fs-observation 策略）。tools.write 用 String.raw 保留换行，避免反引号与美元花括号插值冲突。
 - 响应语言：中文。
+- **Git 發版紀律**：**先 commit、後 tag**；PowerShell 傳 commit 訊息用**雙引號**（單引號會被訊息裡的 `'` 打斷，害 commit 沒執行）；每個 git 步驟檢查 `$LASTEXITCODE`；打完 tag 必驗 `git rev-list -n 1 <tag>` == `git rev-list -n 1 main`。（這症狀出現過兩次：v0.2.2 與 v0.5.1）
 - **診斷/臨時腳本約定**：test/ 底下**每個 .ts 都會被 npm test 當成測試檔**，所以診斷腳本請放 `tmp/`（已 gitignore）或加 `_` 前綴（scripts/run-tests.mjs 會忽略 `_` 開頭的檔案，並列出被忽略者）。
 
 ## 已完成（简述）

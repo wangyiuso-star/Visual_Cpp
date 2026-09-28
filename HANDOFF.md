@@ -96,6 +96,12 @@ OI/算法教学用的 C++ 逐步可视化工具。左半 = 代码编辑器 + cin
 - 编辑器布局 bug 详见 DEBUG.md。
 - npm run typecheck 当前有约 90 个既存类型错误（interpreter.ts 71 / VariablesPanel.tsx 17 / parser.ts 1 / CodeEditor.tsx 1），全是联合类型未收窄，不影响 vite build 与运行；详见 DEBUG.md。
 - 工作区已迁移到笔记本：C:\Users\wangy\Desktop\VisualCode（旧 C:\Users\hy\... 路径作废）。
+- **Git 紀律（兩次 tag 指錯的教訓，必看）**：
+  - 症狀：`git checkout <tag>` 拿到的不是那個版本的程式碼。
+  - 第一次（v0.2.2）：**先打 tag、後 commit** → tag 指向前一個 commit。規則：**永遠先 commit，再打 tag**。
+  - 第二次（v0.5.1）：commit 訊息裡的 `s.append('!')` 含有**單引號**，打斷了 PowerShell 的單引號字串 → `git commit` 根本沒執行，但後面的 `git tag` 照樣跑（還推上去了）→ tag 又指向舊 commit。規則：**PowerShell 傳訊息用雙引號、訊息裡不要有單引號**；而且**每個 git 步驟都要檢查 `$LASTEXITCODE`**（`if ($LASTEXITCODE -ne 0) { exit 1 }`），不要讓後面的步驟在失敗後繼續跑。
+  - ★ **打完 tag 一定要驗**：`git rev-list -n 1 <tag>` 必須等於 `git rev-list -n 1 main`；（若要發佈）再 `git ls-remote --tags origin <tag>` 比對遠端。
+  - 修法（若已指錯且已推送）：`git tag -d <tag>` → 重新 `git tag -a <tag> <commit>` → `git push origin :refs/tags/<tag>`（刪遠端）→ `git push origin <tag>`。
 - **除錯教訓（徽章探針事件，值得記住）**：自己寫的診斷腳本若回報「功能不見了」，**先懷疑探針的抽取邏輯，再懷疑功能**。當時 badge-check.ts 用 `class="caret">([A-Za-z_]\w*)` 抽卡片名，但實際 HTML 是 `class="caret">▾</span>a`（caret 的內容是 ▾、不是空的），所以四種別名只抓到 1 個，印出「NO badge for …」看起來像功能壞掉；換成不依賴取名的寫法（只看 alias-badge 的文字與所在容器）後立刻全數通過——**功能一直是好的**。兩個探針檔中間隔的 32 秒，就是換寫法所花的時間。
 - 另一條同類教訓：`run` 不是 throw，而是把執行期錯誤放進**最後一個快照的 `error` 欄位**，寫斷言要讀 `snapshot.error`。
 - 自动压缩 checkpoint：CHECKPOINT-2026-08-16.md
