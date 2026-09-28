@@ -47,8 +47,7 @@ err('完全没有输入 → 指出第 1 个',
 // ---------- 已知限制（照实断言，方便教材引用） ----------
 err('token 不是数字却给 int → 不能转为数字',
   'int main(){ int a; cin>>a; return 0; }', '不能转为数字', '2*3')
-err('cin >> char 仍不支援（运算符要读成 string）',
-  'int main(){ char c; cin>>c; return 0; }', '不能转为数字', 'a')
+eq('cin >> char 讀單一字元', 'int main(){ char c; cin>>c; cout<<c; return 0; }', 'a', 'a')
 err('cin 目标不能是容器',
   'int main(){ int a[3]; cin>>a; return 0; }', 'cin 目标应为标量变量', '1')
 eq('cin 可以读到数组元素', 'int main(){ int a[3]; cin>>a[1]; cout<<a[1]; return 0; }', '9', '9')

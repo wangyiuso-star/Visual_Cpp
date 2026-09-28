@@ -1,6 +1,19 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**v0.7.0 —— 實作 HKOI 教材編輯的缺口提案（第一優先 6 項 + 兩個粗糙邊 + 字元算術）**。提案：`_工作檔/工作紀錄/13-給VisualCode的缺口提案.md`（他從 17 份教材反推、57 條實測：可用 28 / 不支援 29）。我把 57 條全部重跑一遍驗證，他的清單基本準確。
+  - **1.1 `while (cin >> x)` 讀到 EOF**（他說這是唯一「不補就沒辦法好好上課」的兩項之一）。**根因是輸入模型**：舊版只有 `input: string[]`（用 `split(/\s+/)` 切好的 token），換行資訊早就沒了 → getline 根本不可能實作。改成**游標模型**：留原始字串 `inputText` + `textPos`，`cin >>` 跳過空白讀一個 token（**char 目標只吃一個字元**，照 C++ 的 char 重載），`getline` 讀到下一個 `\n`。新增 AST 節點 `cin_expr`（`cin >> x` 當運算式）：EOF 回 `false`，於是 `while (cin >> x)`、`while (!(cin >> x))`、`if (cin >> x)` 都能用；**語句形式 `cin >> a >> b;` 讀不足仍然是明確錯誤**（保留 v0.5.2 的「要读第 N 个值」訊息，兩種形式共用 `cinReadTargets`）。另加 `cin.ignore()` / `cin.ignore(n, c)`（getline 的搭檔），Windows 的 `\r\n` 會正規化。
+  - **1.2 `getline(cin, s)` + `cin >> char`**：教材用量最大（10 次）。C++ 的經典行為**照實呈現**：`cin >> n; getline(cin, s);` 讀到**空字串**（換行還在緩衝區），要接 `cin.ignore()`——這是教學點，不是 bug，測試裡有一條專門鎖它。
+  - **1.3 C 風格轉型** `(int)x` / `(char)(c+1)` / `(long long)x` / `(int)v.size()`：新增 `cast` 節點（parser 在 `(` 之後 lookahead 認純量型別名，不是型別就退回普通括號）。函數式寫法 `double(a)` 仍不支援。
+  - **1.4 數學函式** `sqrt` / `pow` / `floor` / `ceil` / `round` / `fabs`（都回 double；`sqrt(-1)` 印 `nan`，`cppDefaultDouble` 補了 nan/inf）。
+  - **1.5 `sort(v, greater<int>())`**：新增 `comparator` 節點；`sort` 的參數解析改成掃描（比較子/個數可任意順序），所以 `sort(v, greater<int>())`、`sort(v, n, greater<int>())`、`sort(v, cmp)`、`sort(v, n, cmp)` 都通。
+  - **1.6 `fixed` + `setprecision(n)`**：他特別請求重新考慮（HKOJ 有對應題目 E1714C／E1715C，學生真的會被要求寫）。**用戶決定放寬「永久排除」，但只做這兩個**，不做完整 `<iomanip>`。實作：runtime 存 `floatFixed` / `floatPrecision`，`cout` 遇到 `fixed` / `setprecision(n)` 只改狀態不輸出，`toStringVal` 加 `FloatFmt`。**順帶把 double 的預設輸出改成 C++ 語意**（6 位有效數字、指數 < -4 或 ≥ 6 用科學記號）：`0.1+0.2` → `0.3`、`1.0/3` → `0.333333`、`1e9` → `1e+09`（舊版是 JS 全精度 `0.30000000000000004`）→ compat-test 一條斷言因此翻面。
+  - **4.1 容器比較的誤導訊息 → 真的能比**：新增 `seqOf` / `cellOrder` / `cellEquals`，支援 `vector` / `deque` / `set` / `pair` / `map` 的 `==` `!=` `<` `<=` `>` `>=`（字典序，元素可再是容器），`unordered_map` 只能比相等（無序）。**C 陣列刻意不假裝**：`int a[3] == b[3]` 在 C++ 比的是指標地址，工具給明確說明而不是靜默逐元素比。`sort` / `lower_bound` 一併改用 `cellOrder` → **`sort(vector<pair>)` 也能跑了**（順手解掉提案第 2.4／2.5 兩條：`v.push_back({1,2})` 放 pair、pair 比大小）。
+  - **4.2 `const T&` 參數**：新增 `constRef`；語意同 `T&`（不做 const 正確性檢查），但**照 C++ 可以綁常數/臨時值**（`f(5)`、`f(a*3)`、`f("abc")`）。非 const 的 `int&` 綁常數改成明確錯誤（C++ 也編不過）並提示改用 `const int&` 或按值——舊版的訊息是誤導性的「非法的下标访问」。
+  - **字元算術（提案沒列，但我們自己探針抓到，而且它擋住 `(char)` 的教學用途）**：`'d' - 'a'`、`c + 1`、`c += 1`、`c++`、`c - 32` 以前全部報「字符串 \"d\" 不能转为数字」。三個修正：(1) `num` 對 char 取**字元碼**；(2) `cmp` / `eq` 改成「任一邊是 string 型別才字串比」，否則照數值 → 同時修掉 `'a' > 100`（舊版字串比給錯答案）與 `c == 97`；(3) **賦值與 `++`/`--` 照目標型別做隱式轉換**（`char c; c = c + 1;` 存 `'b'`、`int x; x = 3.7;` 存 3——舊版會把 3.7 原樣存進 int）。
+  - **型別債清理**：`execCall` / `execMethodCall` 的參數從 `Expr` 改成 `Extract<Expr, {kind:'call'}>` / `method_call`（本來就一直在存取 `.args`）→ `tsc --noEmit` 的錯誤從 **149 降到 30**。`npm run build` 仍然只跑 vite（不型別檢查）。
+  - 測試：新增 **`test/gap-test.ts`（92 項）**——逐條覆蓋上面每一項（含 `while(cin>>x)` 空輸入 0 圈、getline 的經典陷阱、`(int)(2.7+1.3)=4` 這種浮點細節、科學記號、字元算術、容器比較的支援/不支援兩側）；`cin-test` 14 項（char 從「不支援」翻面）、`compat-test` 63 項（getline / cin>>char / setprecision / fixed / C 風格轉型 五條從「不可用」翻到「可用」）、`container-test` 42 項。**全部 31 個測試檔通過、0 跳過**。
+  - 尚未處理（提案的第二／第三優先，他說不急）：`#define` / `typedef` / `using ll` / `INT_MAX` / 三目 `?:` / `memset` / `fill(iter)` / `assign` / `size_t` / `s.find(x) != s.end()`（迭代器，永久排除）/ `cin.get()` / 預設參數 / `switch` / lambda。
 - 2026-08-17：**v0.6.1 —— 容器当值时右边不再显示「?」+ 修 `vector<int>()` 崩溃 + 不支援的组合给明确错误**。
   - **使用者回报**：`map` 的值是 `vector` 时，画面上那一格显示 `?`（并猜是「写 set 的时候把 value 绑死成一个值」）。
   - **根因不在 set，而在渲染层**：`VariablesPanel.tsx` 有 **15 处**「不是标量就给 `?`」的退路（map 的键/值、struct 成员、pair 的成员、stack/queue/deque 的元素、数组窗口的格子……），而且 `formatCellShort` 本身也只认 scalar/pair/struct。v0.6.0 让容器能「当值」放进这些位置之后，这些退路就全被踩到了。

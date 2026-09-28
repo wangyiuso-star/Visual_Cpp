@@ -205,6 +205,13 @@ class Parser {
     const params: FunctionParam[] = []
     if (!this.isOp(')')) {
       do {
+        // const T& 是「傳參考但不修改」的慣用寫法。教學上不需要真的檢查 const 正確性，
+        // 語意與 T& 相同即可（以前這裡直接報「不支持的类型 const」）。
+        let isConst = false
+        while (this.isIdent('const')) {
+          this.next()
+          isConst = true
+        }
         const pt = this.parseType()
         const byRef = this.eatOp('&')
         const pname = this.expectIdent().value
@@ -216,7 +223,7 @@ class Parser {
           this.expectOp(']')
           isArray = true
         }
-        params.push({ name: pname, type: pt, byRef, isArray })
+        params.push({ name: pname, type: pt, byRef, isArray, constRef: isConst && byRef })
       } while (this.eatOp(','))
     }
     this.expectOp(')')
@@ -283,7 +290,8 @@ class Parser {
     }
     if (this.isIdent('return')) return this.parseReturn()
     if (this.isIdent('cout')) return this.parseCout()
-    if (this.isIdent('cin')) return this.parseCin()
+    // 只有 cin >> ... 才是 IO 敘述；cin.ignore() 這種成員呼叫要走一般運算式
+    if (this.isIdent('cin') && this.cur(1).value === '>' && this.cur(2).value === '>') return this.parseCin()
     if (this.isTypeStart()) return this.parseVarDecl()
 
     const expr = this.parseExpr()
@@ -791,6 +799,49 @@ class Parser {
     return e
   }
 
+  // (int)x / (char)(c+1) / (long long)x 的型別部分。只認純量型別；
+  // 不是純量就當普通括號處理（例如 (a) + b）。
+  isCastStart(): boolean {
+    const t = this.cur(1)
+    if (t.type !== 'ident') return false
+    return [
+      'int', 'long', 'short', 'char', 'bool', 'double', 'float', 'string', 'unsigned', 'signed', 'size_t',
+    ].includes(t.value)
+  }
+
+  parseCastType(): ScalarTypeName {
+    const t = this.expectIdent()
+    switch (t.value) {
+      case 'int':
+      case 'short':
+      case 'signed':
+      case 'size_t':
+        if (this.isIdent('int')) this.next()
+        return 'int'
+      case 'unsigned': {
+        // unsigned / unsigned int / unsigned long long 都當 int（本工具沒有無號型別）
+        while (this.isIdent('int') || this.isIdent('long')) this.next()
+        return 'int'
+      }
+      case 'long': {
+        while (this.isIdent('long') || this.isIdent('int')) this.next()
+        return 'long long'
+      }
+      case 'char':
+        return 'char'
+      case 'bool':
+        return 'bool'
+      case 'double':
+        return 'double'
+      case 'float':
+        return 'float'
+      case 'string':
+        return 'string'
+      default:
+        throw new ParseError('不支援轉型成 "' + t.value + '"', t.line)
+    }
+  }
+
   parsePrimary(): Expr {
     const t = this.cur()
     // string::npos —— C++ 里 find 找不到时的返回值。本工具用 -1 表示（find 也回 -1），
@@ -806,6 +857,40 @@ class Parser {
       this.next()
       this.next()
       return { kind: 'literal', line: t.line, value: -1, litType: 'int' }
+    }
+    // cin >> x 當條件：while (cin >> x) …… 讀到 EOF 為止。
+    // 只在「cin 後面確實跟著 >>」時才當運算式，否則 getline(cin, s) 的 cin 還是普通識別字。
+    if (t.type === 'ident' && t.value === 'cin' && this.cur(1).value === '>' && this.cur(2).value === '>') {
+      this.next()
+      const targets: Expr[] = []
+      while (this.isOp('>') && this.cur(1).value === '>') {
+        this.next()
+        this.next()
+        targets.push(this.parsePostfix())
+      }
+      return { kind: 'cin_expr', line: t.line, targets }
+    }
+    // sort(v, greater<int>()) / less<int>()
+    if (t.type === 'ident' && (t.value === 'greater' || t.value === 'less') && this.cur(1).value === '<') {
+      const save = this.pos
+      this.next() // greater / less
+      this.next() // <
+      try {
+        this.parseType()
+        this.expectOp('>')
+        this.expectOp('(')
+        this.expectOp(')')
+        return { kind: 'comparator', line: t.line, name: t.value as 'greater' | 'less' }
+      } catch {
+        this.pos = save // 不是比較子就退回，讓它當普通識別字處理
+      }
+    }
+    if (t.value === '(' && this.isCastStart()) {
+      const line = t.line
+      this.next()
+      const type = this.parseCastType()
+      this.expectOp(')')
+      return { kind: 'cast', line, type, expr: this.parseUnary() }
     }
     if (t.type === 'ident' && t.value === 'vector') {
       const type = this.parseType()

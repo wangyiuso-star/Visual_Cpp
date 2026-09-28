@@ -28,13 +28,23 @@ npm run dev
 - `struct`（定义、成员读写、初始化、作参数、作返回值）
 - 容器存结构体：`array` / `tree` / `vector` 里放 struct
 
-**语句**：声明、赋值（`= += -= *= /= %=`）、`++` / `--`、`for` / **范围 for `for (T x : c)`** / `while` / `do-while` / `if-else` / `break` / `continue` / `return` / `cout` / `cin`
+**语句**：声明、赋值（`= += -= *= /= %=`）、`++` / `--`、`for` / **范围 for `for (T x : c)`** / `while` / `do-while` / `if-else` / `break` / `continue` / `return` / `cout` / `cin`（含 **`while (cin >> x)` 读到 EOF**）
 
-**函数**：自定义函数、递归、全局变量、引用参数 `int&`、**数组形参 `int a[]`（共享/别名语义，等同 C++ 数组退化为指针）**、容器按值参数、结构体参数 / 返回值
+**函数**：自定义函数、递归、全局变量、引用参数 `int&`、**`const T&` 参数**（可绑常数：`f(5)`）、**数组形参 `int a[]`（共享/别名语义，等同 C++ 数组退化为指针）**、容器按值参数、结构体参数 / 返回值
 
 **容器可以当值传递**（v0.6.0 起）：函数回传容器（`vector<int> f(){ ... return v; }`）、`T x = f();`、把容器赋给容器的元素（`m["k"] = v`，含 `unordered_map<string,vector<int>>`）、按值传容器参数、临时值下标 `f()[0]`、临时值成员 `mk().x`、整行当参数 `f(g[u])`
 
 **内建**：`min` / `max` / `abs` / `make_pair` / `sort` / `reverse` / `lower_bound` / `swap`
+
+**数学函数**：`sqrt` / `pow` / `floor` / `ceil` / `round` / `fabs`（都回 double，照 C++ 语义）
+
+**输入**：`getline(cin, s)`（读一整行含空白）、`cin >> c`（单一字元）、`cin.ignore()` / `cin.ignore(n, c)`、`while (cin >> x)`（读到 EOF）
+
+**类型转换**：C 风格 `(int)x` / `(char)(c+1)` / `(long long)x` / `(double)a/b`
+
+**字元算术**：`c - 'a'` / `c + 1` / `c++` / `c - 32` / `'A' + 32`（`char` 就是数字，Unit 6 用）
+
+**输出格式**：`cout << fixed << setprecision(n)`（小数字数）、单独 `setprecision(n)`（有效位数）；`double` 预设输出照 C++（6 位有效数字 + 科学记号）
 
 **字元函数**：`toupper` / `tolower`（回 char）、`isdigit` / `isalpha` / `isupper` / `islower` / `isalnum` / `isspace`（回 bool）
 
@@ -44,7 +54,7 @@ npm run dev
 
 **字串 ↔ 数字**：`stoi` / `stol` / `stoll` / `stod` / `stof`（照 C++ 语义：跳前导空白、可选正负号、读到第一个不合法字符就停；`stoi(s, 0, base)` 支持 2..36 进制；一个数字都没有会明确报错）、`to_string`（int / double / char / string → string）
 
-**表达式**：花括号初始化列表（如 `v.push_back({1,2,3})`）
+**表达式**：花括号初始化列表（如 `v.push_back({1,2,3})`、`vector<pair<int,int>>` 的 `v.push_back({1,2})`）、**`cin >> x` 当条件**、**比较子 `greater<int>()` / `less<int>()`**、**容器之间比大小**（`v < w`、`a == b` 的 pair 比较，字典序，元素也可以是容器）
 
 ## 可视化（右侧面板）
 
@@ -81,7 +91,7 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 - `src/App.tsx` — 主壳（布局、步进控制、快捷键、预设、localStorage）
 - `src/index.css` — 样式
 - `src/presets.ts` — 预设示例
-- `test/` — 解释器冒烟测试
+- `test/` — 解释器 / 渲染层测试（`npm test`，31 个测试档；相容性矩阵在 `compat-test.ts`，本轮新功能在 `gap-test.ts`）
 
 ## 架构要点
 
@@ -90,12 +100,14 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 
 ## 已知限制
 
-> 这份清单由 `test/compat-test.ts`（47 项断言）逐条锁定，改动解释器后跑它即可验证。
+> 这份清单由 `test/compat-test.ts`（63 项断言）逐条锁定，改动解释器后跑它即可验证。新功能的细节另有 `test/gap-test.ts`（92 项）。
 
 **语法**
 - 无 `switch`、无三目 `?:`、无位运算（`^` / `&` / `|` / `<<` / `>>`）
 - **支持 range-based for**：`for (int x : v)` / `for (auto x : v)`（值拷贝）/ `for (auto& x : v)`（引用，写回原容器）。可迭代 array / `vector` / `deque` / `set` / `map`（元素是 pair）/ `string`（元素是 char）/ `tree`（1 基层级顺序）/ `bst`（中序＝升序）；`stack` / `queue` / `priority_queue` 在 C++ 里没有 begin/end，会明确报错
-- 容器**不能当标量用**：`int x = v;` / `cout << v;` / `v + 1` / `a[0] = v;` 都会**明确报错**（不会静默变 0）。但注意：真实 C++ 的 `vector` **有** `operator<`（字典序），本工具暂不支援**容器之间的比较**（`v < w` 会报错）
+- 容器**不能当标量用**：`int x = v;` / `cout << v;` / `v + 1` / `a[0] = v;` 都会**明确报错**（不会静默变 0）
+- **容器的比较可用（v0.7.0）**：`vector` / `deque` / `set` / `pair` / `map` 之间有 C++ 的 `==` / `!=` / `<` / `<=` / `>` / `>=`（字典序），元素也可以是容器（`vector<vector<int>>` 能比、能 `sort`）。`unordered_map` 只能比相等（它没有顺序）。**特例**：C 数组的 `a == b` 在真实 C++ 比的是指针地址，工具不假装它是逐元素比较，会明确说明；`stack` / `queue` / `priority_queue` 不支援
+- **有强制类型转换（v0.7.0）**：`(int)x` / `(char)(c+1)` / `(long long)x` / `(double)a/b` / `(int)v.size()`。函数式写法 `double(a)` 仍不支持（会被当函数调用）
 - **无强制类型转换**：`(double)a` 与 `double(a)` 都不支持（`(int)x` 会被当成函数调用、报「未定义的函数 int」）；`double` 与 `int` 之间的隐式转换可用
 - 无指针、类成员函数 / 构造 / 析构、运算符重载、函数重载、模板
 
@@ -106,12 +118,18 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 - 数组形参收到非数组实参（纯量 / vector / 算式）时给明确错误「数组形参 a 需要传入数组（int a[]）」，不会抛内部错误
 
 **输入输出**
-- 无 `getline(cin, s)`，也**不支持 `cin >> char`**（`cin` 只按空白分词读数值/字符串）——因此**「读入一整行含空格的内容」无法演示**。变通：用 `cin >> s` 逐个读 token，再用 `s = a + " " + b` 拼回；或把题目设计成 token 式输入
-- 无 <iomanip> 的 `setprecision` / `fixed`，无 `printf`。`double` 按 JS 默认全精度输出（`0.1+0.2` 打印 `0.30000000000000004`），保留几位小数只能手工算（见 compat-test 里的 0.33 例子）
-- `#include <iomanip>` 这一行本身不报错（`#include` 被跳过），只是里面的东西用不了
+- **`getline(cin, s)` 可用（v0.7.0）**，读一整行到 `\n`（不含），所以「读含空格的句子」能演示。注意 C++ 的经典行为照实呈现：`cin >> n; getline(cin, s);` 会读到**空字串**（换行还留在缓冲区）——要接 `cin.ignore()`（也可用 `cin.ignore(n, c)`）
+- **`while (cin >> x)` 读到 EOF 可用（v0.7.0）**：`cin >> x` 在输入用完时传回 false（C++ 的 istream 转 bool），可用于 `while` / `if`；反过来的 `while (!(cin >> x))` 也通。**语句形式** `cin >> a >> b;` 读不够时**仍然明确报错**（会讲「要读第 N 个但只有 M 个」），不会静默停
+- **`cin >> c`（单一字元）可用（v0.7.0）**：只吃一个非空白字元（照 C++ 的 char 重载），所以「逐字元处理一行」能演示
+- **`fixed` + `setprecision(n)` 可用（v0.7.0）**（只做这两个，不做完整 `<iomanip>`）：`cout << fixed << setprecision(2) << x`。单独写 `setprecision(n)` 照 C++ 是「有效位数」。`printf` 仍不支持
+- **`double` 预设输出改成 C++ 语义（v0.7.0）**：6 位有效数字、指数 < -4 或 ≥ 6 时用科学记号（`0.1+0.2` → `0.3`、`1.0/3` → `0.333333`、`1e9` → `1e+09`）。旧版是 JS 全精度（`0.30000000000000004`）
+- 数学函数（v0.7.0）：`sqrt` / `pow` / `floor` / `ceil` / `round` / `fabs`（都回 double，照 C++ 语义；`sqrt(-1)` 印 `nan`）
+- **字元算术可用（v0.7.0）**：`c - 'a'` / `c + 1` / `c = c + 1` / `c += 1` / `c++` / `c - 32` / `'A' + 32`、`c == 97`（char 与 int 混比照字元码）。Unit 6「字元就是数字」的写法都能跑
+- `#include <iomanip>` 这一行本身不报错（`#include` 被跳过），里面的东西只有 fixed / setprecision 能用
 
 **内建函数**
-- `sort` / `reverse` / `lower_bound` 只接受「容器 (+ 个数)」形式：`sort(v)`、`sort(v, n)`、`reverse(v[, n])`、`lower_bound(v, x)`、`lower_bound(v, n, x)`（`v` 为数组或 vector，升序）
+- `sort` / `reverse` / `lower_bound` 只接受「容器 (+ 个数)」形式：`sort(v)`、`sort(v, n)`、`reverse(v[, n])`、`lower_bound(v, x)`、`lower_bound(v, n, x)`（`v` 为数组或 vector；不写比较子就是升序、字典序）
+- **降序比较子（v0.7.0）**：`sort(v, greater<int>())` / `sort(v, less<int>())` / `sort(v, n, greater<int>())`。元素可以是容器（`sort(vector<pair<int,int>>)` 是 OI 常客），`lower_bound` 也一样
 - `find` / `rfind` 找不到时回 **-1**（本工具没有 `string::npos` 那个巨大值；但**接受写 `string::npos`，它等於 -1**，所以 `if (s.find(x) == string::npos)` 这种惯用写法可以跑）
 - **`append` / `insert` / `replace` / `compare` 只接受字串参数**（C++ 没有接受单一字元的重载）：`s.append('!')` 会明确报错并提示改用 `push_back` 或 `+=`。反过来，`find` / `rfind` / `push_back` / `+=` **可以吃字元**（那些在 C++ 是合法重载）
 - `substr(pos)` 在 `pos > s.size()` 时**明确报错**（与 `at` 一致；`pos == s.size()` 合法，回空字串）
@@ -124,7 +142,7 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 - `long long` 用 JS number 存储，精度约 2^53
 - 步数上限 20000（防死循环 / 递归过深）
 - 递归树根节点（main）若无显式 `return` 不标记 returned
-- 函数参数默认按值传；引用需显式 `&`
+- 函数参数默认按值传；引用需显式 `&`。**`const T&` 可用（v0.7.0）**：`const vector<int>& v` 与 `vector<int>& v` 同义（工具不做 const 正确性检查），而且照 C++ 可以绑常数/临时值 `f(5)`；非 const 的 `int&` 绑常数会明确报错（C++ 也编不过），并提示改用 `const int&` 或按值。`const` 用在宣告（`const int N = 10;`）本来就可以
 
 ## 测试
 

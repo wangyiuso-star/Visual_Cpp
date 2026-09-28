@@ -48,7 +48,8 @@ err('a[0] = v', 'int main(){ int a[2]; vector<int> v; v.push_back(1); a[0]=v; co
 err('cout << v', 'int main(){ vector<int> v; v.push_back(1); cout<<v; return 0; }', '当作标量使用')
 err('s += v', 'int main(){ string s="a"; vector<int> v; v.push_back(1); s+=v; cout<<s; return 0; }', '当作标量使用')
 err('v + 1', 'int main(){ vector<int> v; v.push_back(1); cout<<(v+1); return 0; }', '当作标量使用')
-err('v < w（容器比较暂不支援）', 'int main(){ vector<int> v; vector<int> w; cout<<(v<w); return 0; }', '当作标量使用')
+eq('v < w（空 vector 相等 → false）', 'int main(){ vector<int> v; vector<int> w; cout<<(v<w); return 0; }', 'false')
+err('容器与标量混比要明确报错', 'int main(){ vector<int> v; cout<<(v<3); return 0; }', '不能把 vector 容器与标量比较')
 err('回传标量却赋给 vector', 'int f(){ return 1; } int main(){ vector<int> v = f(); return 0; }', '不能用标量初始化 vector')
 err('类型不符的初始化', 'int main(){ set<int> s; vector<int> v; set<int> w = v; return 0; }', '初始化类型不匹配')
 
@@ -78,8 +79,14 @@ eq('vector<vector<int>> 空行可再填', 'int main(){ vector<vector<int>> g; g.
 
 // ---------- 不支援的组合要给「人看得懂」的错误，不能外泄内部讯息 ----------
 err('set<容器> 明确报错', 'int main(){ set<vector<int>> s; vector<int> v; v.push_back(1); s.insert(v); return 0; }', '只支持标量')
-err('sort(vector<容器>) 明确报错', 'int main(){ vector<vector<int>> g; g.push_back({2}); g.push_back({1}); sort(g); return 0; }', '只能放进标量元素')
-err('lower_bound(vector<容器>) 明确报错', 'int main(){ vector<vector<int>> g; g.push_back({1}); vector<int> x; x.push_back(1); cout<<lower_bound(g,x); return 0; }', '只能放进标量元素')
+// 容器比较：C++ 的 vector 有 operator<（字典序），所以不是「拒绝」，要真的能比
+eq('vector 字典序 v < w', 'int main(){ vector<int> v; vector<int> w; v.push_back(1); w.push_back(2); cout<<(v<w); return 0; }', 'true')
+eq('vector 相等 v == w', 'int main(){ vector<int> v; vector<int> w; v.push_back(1); w.push_back(1); cout<<(v==w); return 0; }', 'true')
+eq('容器不同 → v == w 为 false', 'int main(){ vector<int> v; vector<int> w; v.push_back(1); cout<<(v==w); return 0; }', 'false')
+eq('sort(vector<容器>) 字典序（C++ 合法）', 'int main(){ vector<vector<int>> g; g.push_back({2}); g.push_back({1}); sort(g); cout<<g[0][0]<<g[1][0]; return 0; }', '12')
+eq('lower_bound(vector<容器>)', 'int main(){ vector<vector<int>> g; g.push_back({1}); g.push_back({3}); vector<int> x; x.push_back(2); cout<<lower_bound(g,x); return 0; }', '1')
+err('raw array 比较给「比的是指针」的说明', 'int main(){ int a[2]={1,2}; int b[2]={1,2}; cout<<(a==b); return 0; }', '比的是指针')
+err('stack 的比较明确不支援', 'int main(){ stack<int> a; stack<int> b; cout<<(a==b); return 0; }', '暂不支援')
 
 console.log('==== container-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)

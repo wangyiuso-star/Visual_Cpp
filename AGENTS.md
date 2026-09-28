@@ -69,6 +69,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.6.0 —— 容器可以当值传递（回传 / 赋值 / 按值传参）
 - [x] 容器当值不再显示「?」+ 修 `vector<int>()` 崩溃 + 不支援组合给明确错误 —— 已做（渲染层 15 处「不是标量就给 `?`」的退路改成递归摘要 `formatCellShort`；空 vector 构造式；`g.push_back({1,2})`；`set<容器>`/`sort(容器)` 给明确错误；test/summary-test.ts 23 项 + container 36 项 + render 4 项）
 - [x] 发布 v0.6.1 —— 容器当值摘要修正
+- [x] HKOI 缺口提案第一优先 —— 已做（**输入模型改成游标**：`while (cin >> x)` 读到 EOF、`getline`、`cin >> char`、`cin.ignore()`；C 风格转型 `(int)/(char)/(long long)`；`sqrt/pow/floor/ceil`；`sort(v, greater<int>())`；`fixed + setprecision(n)`；`const T&` 参数；**字符算术** `c-'a'`/`c+1`/`c-32`（含赋值与 ++/-- 照目标型别隐式转换）；容器与 pair 比较（含 `sort(vector<pair>)`）；test/gap-test.ts 92 项）
+- [x] 发布 v0.7.0 —— HKOI 缺口提案第一优先
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

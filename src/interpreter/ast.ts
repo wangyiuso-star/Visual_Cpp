@@ -23,6 +23,8 @@ export interface FunctionParam {
   // 形参写成 int a[] 形式：按「共享/别名」绑定调用方的数组（等同 C++ 的数组退化指针），不是拷贝。
   // 声明里的长度一律忽略（与 C++ 一致），cell 自带真实形状。
   isArray?: boolean
+  // const T& 參數：可以綁臨時值（f(5) 是合法 C++），語意上沒人能寫入
+  constRef?: boolean
 }
 
 export interface StructDef {
@@ -98,3 +100,14 @@ export type Expr =
   | { kind: 'member'; line: number; object: Expr; field: string }
   | { kind: 'container_ctor'; line: number; type: Type; size?: Expr; fill?: Expr }
   | { kind: 'init_list'; line: number; items: Expr[] }
+  // cin >> x 當條件用（while (cin >> x) 讀到 EOF）。C++ 裡這是 istream 轉 bool。
+  | { kind: 'cin_expr'; line: number; targets: Expr[] }
+  // 強制型別轉換 (int)x / (char)(c+1) / (long long)x。只支援純量型別。
+  | { kind: 'cast'; line: number; type: ScalarTypeName; expr: Expr }
+  // sort(v, greater<int>()) / sort(v, less<int>()) 的比較子
+  | { kind: 'comparator'; line: number; name: 'greater' | 'less' }
+
+// 節點子型別：內建函式與方法呼叫的實作只看這兩種節點，用 Extract 取出來，
+// 免得參數寫 Expr 卻一直存取 .args（那是既有的型別債，會讓 tsc 噴上百條假錯誤）。
+export type CallExpr = Extract<Expr, { kind: 'call' }>
+export type MethodCallExpr = Extract<Expr, { kind: 'method_call' }>

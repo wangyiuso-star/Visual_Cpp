@@ -1,6 +1,18 @@
 import { Memory, getAtPath } from './memory'
 import type { Cell, ScalarValue, VarView, CellRef, BstNode } from './memory'
-import type { Program, Stmt, Expr, VarDecl, Type, ScalarTypeName, InitExpr, FunctionDef, StructDef } from './ast'
+import type {
+  Program,
+  Stmt,
+  Expr,
+  CallExpr,
+  MethodCallExpr,
+  VarDecl,
+  Type,
+  ScalarTypeName,
+  InitExpr,
+  FunctionDef,
+  StructDef,
+} from './ast'
 
 export interface Snapshot {
   step: number
@@ -82,8 +94,15 @@ interface Runtime {
   lastLine: number
   showCond: { if: boolean; while: boolean; for: boolean }
   boolAsInt: boolean
+  // cin 的游標模型：token 陣列只留著算「總共幾個值」（錯誤訊息用），
+  // 真正的位置記在 inputText/textPos —— getline 必須知道換行在哪。
   input: string[]
   inputPos: number
+  inputText: string
+  textPos: number
+  // cout << fixed / setprecision(n) 的輸出狀態（C++ 的串流狀態）
+  floatFixed: boolean
+  floatPrecision: number | null
   structs: Map<string, StructDef>
   sortInfo: { name: string; n: number; comparisons: number; warned: boolean } | null
 }
@@ -107,11 +126,40 @@ function defaultScalar(type: ScalarTypeName): ScalarValue {
   return 0
 }
 
-function toStringVal(rv: RV, boolAsInt = false): string {
+function toStringVal(rv: RV, boolAsInt = false, fmt?: FloatFmt): string {
   if (rv.type === 'char') return rv.v as string
   if (rv.type === 'string') return rv.v as string
   if (rv.type === 'bool') return boolAsInt ? (rv.v ? '1' : '0') : rv.v ? 'true' : 'false'
+  if (fmt && (rv.type === 'double' || rv.type === 'float')) return formatDouble(rv.v as number, fmt)
   return String(rv.v)
+}
+
+export interface FloatFmt {
+  fixed: boolean
+  precision: number | null
+}
+
+// C++ 預設的浮點輸出：6 位有效數字；指數 < -4 或 >= 6 時改用科學記號（指數至少兩位，1e+09）。
+function cppDefaultDouble(v: number): string {
+  if (Number.isNaN(v)) return 'nan'
+  if (v === Infinity) return 'inf'
+  if (v === -Infinity) return '-inf'
+  if (!Number.isFinite(v)) return String(v)
+  if (v === 0) return '0'
+  const exp = Math.floor(Math.log10(Math.abs(v)))
+  if (exp < -4 || exp >= 6) {
+    const m = /^(.*)e([+-])(\d+)$/.exec(v.toExponential(5))
+    if (m) return String(Number(m[1])) + 'e' + m[2] + m[3].padStart(2, '0')
+    return v.toExponential(5)
+  }
+  return String(Number(v.toPrecision(6)))
+}
+
+// cout << fixed << setprecision(n) 的組合，以及單獨的 setprecision(n)（有效位數）。
+function formatDouble(v: number, fmt: FloatFmt): string {
+  if (fmt.fixed) return v.toFixed(Math.max(0, Math.min(20, fmt.precision ?? 6)))
+  if (fmt.precision !== null) return String(Number(v.toPrecision(Math.max(1, Math.min(21, fmt.precision)))))
+  return cppDefaultDouble(v)
 }
 
 function parseInputValue(raw: string): RV {
@@ -120,7 +168,54 @@ function parseInputValue(raw: string): RV {
   return { type: 'string', v: raw }
 }
 
-// 容器不能当标量用。evalExpr 现在会把「容器识别字 / 下标」当成「带 cell 的值」回传，
+// ---- cin 的游標模型 ----
+// 舊版只有一個 token 陣列，所以 getline 不可能實作（換行資訊早就被 split 掉了）。
+// 現在多存原始輸入 + 游標：>> 跳過空白讀一個 token（char 只吃一個字元，照 C++ 的 char 重載），
+// getline 讀到下一個 '\n' 為止（並吃掉它）—— 所以 cin >> n; getline(cin, s); 會讀到空字串，
+// 這正是 C++ 的經典行為（要配 cin.ignore()）。
+function skipInputSpace(rt: Runtime): void {
+  while (rt.textPos < rt.inputText.length && isSpaceChar(rt.inputText.charAt(rt.textPos))) rt.textPos++
+}
+
+function readCinToken(rt: Runtime, target: ScalarTypeName | null): string | null {
+  skipInputSpace(rt)
+  if (rt.textPos >= rt.inputText.length) return null
+  if (target === 'char') {
+    const ch = rt.inputText.charAt(rt.textPos)
+    rt.textPos++
+    return ch
+  }
+  let end = rt.textPos
+  while (end < rt.inputText.length && !isSpaceChar(rt.inputText.charAt(end))) end++
+  const tok = rt.inputText.slice(rt.textPos, end)
+  rt.textPos = end
+  return tok
+}
+
+function readCinLine(rt: Runtime): string | null {
+  if (rt.textPos >= rt.inputText.length) return null
+  const nl = rt.inputText.indexOf('\n', rt.textPos)
+  if (nl < 0) {
+    const rest = rt.inputText.slice(rt.textPos)
+    rt.textPos = rt.inputText.length
+    return rest
+  }
+  const lineText = rt.inputText.slice(rt.textPos, nl)
+  rt.textPos = nl + 1
+  return lineText
+}
+
+function inadequateInputMsg(rt: Runtime): string {
+  return (
+    'cin 输入不足：程式要读第 ' +
+    (rt.inputPos + 1) +
+    ' 个值，但「cin 输入」框只提供了 ' +
+    rt.input.length +
+    ' 个（用空白分隔）'
+  )
+}
+
+// 「容器不能当标量用」。evalExpr 现在会把「容器识别字 / 下标」当成「带 cell 的值」回传，
 // 所以每个「要求标量」的入口都要在这里拦下来——否则会静默变成 0（那比报错更糟）。
 function assertScalarRV(rv: RV, line: number): void {
   if (rv.cell && rv.cell.kind !== 'scalar') {
@@ -136,6 +231,9 @@ function num(rv: RV, line: number): number {
   if (typeof rv.v === 'number') return rv.v
   if (typeof rv.v === 'boolean') return rv.v ? 1 : 0
   if (typeof rv.v === 'string') {
+    // char 存的是單字元字串，算術時要照它的字元碼（C++ 的 char 會被提升成 int）。
+    // 少了這一條，'z' - 'a' 會變成「字符串 "z" 不能转为数字」——Unit 6「字元就是數字」整個上不了。
+    if (rv.type === 'char') return charCode(rv.v)
     if (rv.v === '') return 0
     const n = Number(rv.v)
     if (!Number.isFinite(n)) throw new RuntimeError('字符串 "' + rv.v + '" 不能转为数字', line)
@@ -218,19 +316,31 @@ function toIndex(rv: RV, line: number): number {
   return Math.trunc(n)
 }
 
-function eq(l: RV, r: RV): boolean {
-  if (typeof l.v === 'string' || typeof r.v === 'string') return String(l.v) === String(r.v)
-  return Number(l.v) === Number(r.v)
+function charCode(s: string): number {
+  return s.length > 0 ? s.charCodeAt(0) : 0
 }
 
+// 標量之間比大小：只有「任一邊是 string 型別」才用字串比較（C++ 的 string 重載），
+// 其餘照數值 —— char 用字元碼。以前是「typeof 是 string 就字串比」，
+// 所以 'a' > 100 這種 char 與 int 混比會給錯答案。
 function cmp(l: RV, r: RV, line = 0): number {
   assertScalarRV(l, line)
   assertScalarRV(r, line)
-  const a: string | number = typeof l.v === 'string' ? l.v : Number(l.v)
-  const b: string | number = typeof r.v === 'string' ? r.v : Number(r.v)
-  if (a < b) return -1
-  if (a > b) return 1
-  return 0
+  if (l.type === 'string' || r.type === 'string') {
+    const a = toStringVal(l)
+    const b = toStringVal(r)
+    return a < b ? -1 : a > b ? 1 : 0
+  }
+  const a = num(l, line)
+  const b = num(r, line)
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+function eq(l: RV, r: RV, line = 0): boolean {
+  assertScalarRV(l, line)
+  assertScalarRV(r, line)
+  if (l.type === 'string' || r.type === 'string') return toStringVal(l) === toStringVal(r)
+  return num(l, line) === num(r, line)
 }
 
 function coerceTo(type: ScalarTypeName, rv: RV, line: number): ScalarValue {
@@ -273,17 +383,17 @@ function applyBinary(op: string, l: RV, r: RV, line: number): RV {
       return { type: 'int', v: Math.trunc(a) % Math.trunc(b) }
     }
     case '==':
-      return { type: 'bool', v: eq(l, r) }
+      return { type: 'bool', v: valueEquals(l, r, line) }
     case '!=':
-      return { type: 'bool', v: !eq(l, r) }
+      return { type: 'bool', v: !valueEquals(l, r, line) }
     case '<':
-      return { type: 'bool', v: cmp(l, r, line) < 0 }
+      return { type: 'bool', v: valueOrder(l, r, line) < 0 }
     case '<=':
-      return { type: 'bool', v: cmp(l, r, line) <= 0 }
+      return { type: 'bool', v: valueOrder(l, r, line) <= 0 }
     case '>':
-      return { type: 'bool', v: cmp(l, r, line) > 0 }
+      return { type: 'bool', v: valueOrder(l, r, line) > 0 }
     case '>=':
-      return { type: 'bool', v: cmp(l, r, line) >= 0 }
+      return { type: 'bool', v: valueOrder(l, r, line) >= 0 }
     default:
       throw new RuntimeError('不支持的操作符 "' + op + '"', line)
   }
@@ -407,6 +517,13 @@ function* buildElemCell(rt: Runtime, elemType: Type, argExpr: Expr, line: number
       for (const it of argExpr.items) cells.push(yield* buildElemCell(rt, elemType.elem, it, line))
       return { kind: 'vector', elemType: elemType.elem, cells }
     }
+    // vector<pair<int,int>> v; v.push_back({1, 2});
+    if (elemType.kind === 'pair') {
+      if (argExpr.items.length !== 2) throw new RuntimeError('pair 的初始化列表要有 2 个值（{first, second}）', line)
+      const first = yield* buildElemCell(rt, elemType.first, argExpr.items[0], line)
+      const second = yield* buildElemCell(rt, elemType.second, argExpr.items[1], line)
+      return { kind: 'pair', firstType: elemType.first, secondType: elemType.second, first, second }
+    }
     return yield* buildStructFromList(rt, elemType, argExpr.items, line)
   }
   if (argExpr.kind === 'ident' || argExpr.kind === 'index' || argExpr.kind === 'member') {
@@ -432,13 +549,107 @@ function cellScalar(cell: Cell): ScalarValue {
   return cell.value === null ? defaultScalar(cell.type) : cell.value
 }
 
-// 排序 / 二分这类「按大小比较」的内建只认标量元素。这里给一句人看得懂的错误，
-// 而不是让 cellScalar 抛出「cellScalar: 非标量」这种看不懂的内部讯息。
-function cellScalarElem(cell: Cell, line: number): ScalarValue {
-  if (cell.kind !== 'scalar') {
-    throw new RuntimeError('这个容器暂时只能放进标量元素，不支持 ' + cell.kind + '（要比较 struct/pair 请用 sort(v, cmp)）', line)
+// 容器摊平成「可比较的序列」：C++ 的 operator< 对 vector/deque/set/pair/map 都是字典序
+//（map 比的是 (key,value) 序列）。raw array 刻意不支援 —— C++ 里 int a[3] == b[3] 比的是
+// 指针地址，假装成逐元素比较会教错。stack/queue/priority_queue/tree/bst 也不支援。
+function seqOf(cell: Cell): Cell[] | null {
+  switch (cell.kind) {
+    case 'vector':
+      return cell.cells
+    case 'deque':
+    case 'set':
+      return cell.items
+    case 'pair':
+      return [cell.first, cell.second]
+    case 'map':
+      return cell.entries.flatMap((e) => [e.key, e.value])
+    default:
+      return null
   }
-  return cell.value === null ? defaultScalar(cell.type) : cell.value
+}
+
+function scalarOrderKey(cell: { type: ScalarTypeName; value: ScalarValue | null }): string | number {
+  const v = cell.value === null ? defaultScalar(cell.type) : cell.value
+  if (cell.type === 'char') return charCode(String(v))
+  if (typeof v === 'string') return v
+  if (typeof v === 'boolean') return v ? 1 : 0
+  return Number(v)
+}
+
+function rawArrayCompareError(cell: Cell, line: number): never {
+  throw new RuntimeError(
+    'int a[] 之间的比较在 C++ 里比的是指针（地址），不是逐元素；本工具没有指针，所以不支援（请用 vector）',
+    line,
+  )
+}
+
+// 三向比较：-1 / 0 / 1。容器之间照 C++ 的字典序，元素可以是容器（镶嵌）。
+function cellOrder(a: Cell, b: Cell, line: number): number {
+  if (a.kind === 'array' || b.kind === 'array') rawArrayCompareError(a.kind === 'array' ? a : b, line)
+  if (a.kind !== b.kind) throw new RuntimeError('不能比较 ' + a.kind + ' 与 ' + b.kind + '（C++ 里只有同一种容器能比）', line)
+  if (a.kind === 'scalar' && b.kind === 'scalar') {
+    const x = scalarOrderKey(a)
+    const y = scalarOrderKey(b)
+    if (typeof x === 'string' && typeof y === 'string') return x < y ? -1 : x > y ? 1 : 0
+    if (typeof x === 'string' || typeof y === 'string') {
+      const sx = String(x)
+      const sy = String(y)
+      return sx < sy ? -1 : sx > sy ? 1 : 0
+    }
+    return x < y ? -1 : x > y ? 1 : 0
+  }
+  if (a.kind === 'umap' || b.kind === 'umap') {
+    throw new RuntimeError('unordered_map 没有顺序，不能比大小（可以用 == 比相等）', line)
+  }
+  const sa = seqOf(a)
+  const sb = seqOf(b)
+  if (!sa || !sb) throw new RuntimeError(a.kind + ' 容器之间的比较暂不支援', line)
+  const n = Math.min(sa.length, sb.length)
+  for (let i = 0; i < n; i++) {
+    const c = cellOrder(sa[i], sb[i], line)
+    if (c !== 0) return c
+  }
+  return sa.length - sb.length
+}
+
+// 相等：unordered_map 是无序的，要比的是 (key,value) 集合。
+function cellEquals(a: Cell, b: Cell, line: number): boolean {
+  if (a.kind === 'umap' || b.kind === 'umap') {
+    if (a.kind !== b.kind) throw new RuntimeError('不能比较 ' + a.kind + ' 与 ' + b.kind, line)
+    const key = (c: Cell) => (c.kind === 'umap' ? c.entries : [])
+    const sa = key(a)
+      .map((e) => [e.key, e.value] as [Cell, Cell])
+      .sort((p, q) => cellOrder(p[0], q[0], line))
+    const sb = key(b)
+      .map((e) => [e.key, e.value] as [Cell, Cell])
+      .sort((p, q) => cellOrder(p[0], q[0], line))
+    if (sa.length !== sb.length) return false
+    for (let i = 0; i < sa.length; i++) {
+      if (cellOrder(sa[i][0], sb[i][0], line) !== 0) return false
+      if (cellOrder(sa[i][1], sb[i][1], line) !== 0) return false
+    }
+    return true
+  }
+  return cellOrder(a, b, line) === 0
+}
+
+// 比较两个值（可能是容器，也可能是标量）。混用（容器 vs 标量）给明确错误。
+function valueOrder(l: RV, r: RV, line: number): number {
+  const lc = l.cell && l.cell.kind !== 'scalar' ? l.cell : null
+  const rc = r.cell && r.cell.kind !== 'scalar' ? r.cell : null
+  if (lc && rc) return cellOrder(lc, rc, line)
+  if (lc || rc) {
+    throw new RuntimeError('不能把 ' + (lc ? lc.kind : rc!.kind) + ' 容器与标量比较', line)
+  }
+  return cmp(l, r, line)
+}
+
+function valueEquals(l: RV, r: RV, line: number): boolean {
+  const lc = l.cell && l.cell.kind !== 'scalar' ? l.cell : null
+  const rc = r.cell && r.cell.kind !== 'scalar' ? r.cell : null
+  if (lc && rc) return cellEquals(lc, rc, line)
+  if (lc || rc) return false
+  return eq(l, r, line)
 }
 
 function setInsert(items: Cell[], item: Cell): { items: Cell[]; index: number } {
@@ -1065,6 +1276,22 @@ function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       return { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
     }
 
+    // while (cin >> x)：讀到輸入結束就回 false，讓迴圈自然結束（C++ 的 istream 轉 bool）
+    case 'cin_expr': {
+      const ok = yield* cinReadTargets(rt, expr.targets, expr.line)
+      return { type: 'bool', v: ok }
+    }
+
+    // 強制型別轉換：(int)x / (char)(c + 1) / (long long)x
+    case 'cast': {
+      const rv = yield* evalExpr(rt, expr.expr)
+      assertScalarRV(rv, expr.line)
+      return { type: expr.type, v: coerceTo(expr.type, rv, expr.line) }
+    }
+
+    case 'comparator':
+      throw new RuntimeError('比较子 greater/less 只能用在 sort(v, cmp) 的位置', expr.line)
+
     case 'container_ctor': {
       if (expr.type.kind !== 'vector') throw new RuntimeError('暂只支持 vector 构造函数表达式', expr.line)
       const elem = expr.type.elem
@@ -1120,14 +1347,17 @@ function* execAssign(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   const cur: RV = { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
   const nv = combineAssign(expr.op, cur, value, expr.line)
   assertScalarRV(nv, expr.line) // a[0] = v 这种「把容器赋给标量元素」必须报错，不能静默写 0
+  // 隐式转换照目标的型别做：char c; c = c + 1; 要存 'b' 而不是 98；
+  // int x; x = 3.7; 要存 3（以前会把 3.7 原样存进去）。
+  const sv = coerceTo(lv.cell.type, nv, expr.line)
   if (lv.strIdx !== undefined) {
-    lv.mem.setStringChar(lv.name, lv.path, lv.strIdx, nv.v)
+    lv.mem.setStringChar(lv.name, lv.path, lv.strIdx, sv)
     rt.mem.logWrite(lv.name, lv.path.concat(lv.strIdx))
-    return { type: lv.cell.type, v: nv.v }
+    return { type: lv.cell.type, v: sv }
   }
-  lv.mem.setScalar(lv.name, lv.path, nv.v)
+  lv.mem.setScalar(lv.name, lv.path, sv)
   rt.mem.logWrite(lv.name, lv.path)
-  return { type: lv.cell.type, v: nv.v }
+  return { type: lv.cell.type, v: sv }
 }
 
 function* execUpdate(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
@@ -1137,12 +1367,14 @@ function* execUpdate(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   const one: RV = { type: 'int', v: 1 }
   const old: RV = { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
   const nv = applyBinary(binOp, old, one, expr.line)
-  lv.mem.setScalar(lv.name, lv.path, nv.v)
+  // 存回去要照目标的型别转换：char c; c++ 要存 'b'，不是 98（以前 cout 会印出 98）
+  const sv = coerceTo(lv.cell.type, nv, expr.line)
+  lv.mem.setScalar(lv.name, lv.path, sv)
   rt.mem.logWrite(lv.name, lv.path)
-  return expr.prefix ? nv : old
+  return expr.prefix ? { type: lv.cell.type, v: sv } : old
 }
 
-function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
+function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
   const name = expr.name
 
   if (name === 'min' || name === 'max') {
@@ -1159,6 +1391,44 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     if (expr.args.length !== 1) throw new RuntimeError('abs 需要 1 个参数', expr.line)
     const a = yield* evalExpr(rt, expr.args[0])
     return { type: a.type, v: Math.abs(num(a, expr.line)) }
+  }
+  // <cmath> 的常用函式（Unit 1 §9 數學函式）。C++ 的 sqrt/pow/floor/ceil 都回 double。
+  if (
+    name === 'sqrt' ||
+    name === 'pow' ||
+    name === 'floor' ||
+    name === 'ceil' ||
+    name === 'round' ||
+    name === 'fabs'
+  ) {
+    const need = name === 'pow' ? 2 : 1
+    if (expr.args.length !== need) throw new RuntimeError(name + ' 需要 ' + need + ' 个参数', expr.line)
+    const a = num(yield* evalExpr(rt, expr.args[0]), expr.line)
+    if (name === 'pow') {
+      const b = num(yield* evalExpr(rt, expr.args[1]), expr.line)
+      return { type: 'double', v: Math.pow(a, b) }
+    }
+    if (name === 'sqrt') return { type: 'double', v: Math.sqrt(a) }
+    if (name === 'floor') return { type: 'double', v: Math.floor(a) }
+    if (name === 'ceil') return { type: 'double', v: Math.ceil(a) }
+    if (name === 'round') return { type: 'double', v: Math.round(a) }
+    return { type: 'double', v: Math.abs(a) }
+  }
+  if (name === 'getline') {
+    if (expr.args.length !== 2) throw new RuntimeError('getline 需要 2 个参数：getline(cin, s)', expr.line)
+    const src = expr.args[0]
+    if (!(src.kind === 'ident' && src.name === 'cin')) {
+      throw new RuntimeError('getline 的第一个参数只支援 cin（读档还没做）', expr.line)
+    }
+    const lv = yield* resolveTarget(rt, expr.args[1], true)
+    if (!(lv.cell.kind === 'scalar' && lv.cell.type === 'string')) {
+      throw new RuntimeError('getline 的第二个参数要是 string 变量', expr.line)
+    }
+    const lineText = readCinLine(rt)
+    if (lineText === null) return { type: 'bool', v: false } // C++：到檔案尾回 false、字串不變
+    lv.mem.setScalar(lv.name, lv.path, lineText)
+    rt.mem.logWrite(lv.name, lv.path)
+    return { type: 'bool', v: true }
   }
   if (name === 'stoi' || name === 'stol' || name === 'stoll') {
     if (expr.args.length < 1) throw new RuntimeError(name + ' 需要 1 个字串参数', expr.line)
@@ -1233,18 +1503,27 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     }
     // 参数形态：sort(v) / sort(v, n) / sort(v, cmp) / sort(v, n, cmp)；reverse 只有 (v) / (v, n)
     let cmpName: string | null = null
+    let builtinCmp: 'greater' | 'less' | null = null
     let countArg: Expr | undefined
     if (name === 'sort' && expr.args.length >= 2) {
-      const second = expr.args[1]
-      if (second.kind === 'ident' && rt.functions.has(second.name)) {
-        cmpName = second.name
-        if (expr.args.length >= 3) throw new RuntimeError('比较函数形式是 sort(v, cmp) 或 sort(v, n, cmp)', expr.line)
-      } else {
-        countArg = second
-        const third = expr.args[2]
-        if (third) {
-          if (third.kind === 'ident' && rt.functions.has(third.name)) cmpName = third.name
-          else throw new RuntimeError('sort 的第三个参数应是自定义比较函数的名字', expr.line)
+      // 參數形式：sort(v) / sort(v, n) / sort(v, cmp) / sort(v, n, cmp)（cmp 可以是函式名或 greater<int>()）
+      for (let k = 1; k < expr.args.length; k++) {
+        const a = expr.args[k]
+        const isCmp = a.kind === 'comparator' || (a.kind === 'ident' && rt.functions.has(a.name))
+        if (isCmp) {
+          if (cmpName || builtinCmp) throw new RuntimeError('sort 只能有一个比较子', expr.line)
+          if (a.kind === 'comparator') builtinCmp = a.name
+          else cmpName = a.name
+        } else {
+          if (countArg) {
+            throw new RuntimeError(
+              expr.args.length >= 3
+                ? 'sort 的第三个参数应是自定义比较函数的名字（或 greater<int>()）'
+                : 'sort 的参数形式是 sort(v) / sort(v, n) / sort(v, cmp) / sort(v, n, cmp)',
+              expr.line,
+            )
+          }
+          countArg = a
         }
       }
     } else if (name === 'reverse' && expr.args.length >= 3) {
@@ -1274,9 +1553,14 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
           for (let i = 0; i < cur.length; i++) fullNow[i] = cur[i]
           lv.mem.updateAt(lv.name, lv.path, (c) => (c.kind === 'array' || c.kind === 'vector' ? { ...c, cells: fullNow } : c))
         })
+      } else if (builtinCmp) {
+        rt.sortInfo = null
+        const sign = builtinCmp === 'greater' ? -1 : 1
+        part = part.sort((x, y) => sign * cellOrder(x, y, expr.line))
       } else {
         rt.sortInfo = null
-        part = part.sort((x, y) => scalarCmp(cellScalarElem(x, expr.line), cellScalarElem(y, expr.line)))
+        // 容器元素也能排（sort(vector<pair<int,int>>) 是 OI 的常客）
+        part = part.sort((x, y) => cellOrder(x, y, expr.line))
       }
     } else {
       rt.sortInfo = null
@@ -1301,8 +1585,9 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     const hasN = expr.args.length >= 3
     const n = hasN ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line))) : len
     const x = yield* evalExpr(rt, expr.args[hasN ? 2 : 1])
+    const xCell: Cell = x.cell ?? { kind: 'scalar', type: x.type, value: x.v }
     for (let i = 0; i < n; i++) {
-      if (scalarCmp(cellScalarElem(lv.cell.cells[i], expr.line), x.v) >= 0) {
+      if (cellOrder(lv.cell.cells[i], xCell, expr.line) >= 0) {
         rt.mem.logRead(lv.name, lv.path.concat(i))
         return { type: 'int', v: i }
       }
@@ -1336,6 +1621,19 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       if (p.isArray && ax.kind !== 'ident' && ax.kind !== 'member' && ax.kind !== 'index') {
         throw new RuntimeError('数组形参 ' + p.name + ' 需要传入数组名（int a[]），不能传字面量或算式', expr.line)
       }
+      const locatable = ax.kind === 'ident' || ax.kind === 'member' || ax.kind === 'index'
+      if (!locatable) {
+        // const T& 可以绑临时值（C++ 的 const 引用会延长生命周期），f(5)、f(a+b) 都合法。
+        // 反正 const 引用里写不进去，所以直接按值绑一份，行为与 C++ 一致。
+        if (p.constRef) {
+          argData.push({ rv: yield* evalExpr(rt, ax) })
+          continue
+        }
+        throw new RuntimeError(
+          '引用形参 ' + p.name + ' 需要一个变量（C++ 的 int& 不能绑常数或算式；要传常数请写成 const ' + (p.type.kind === 'scalar' ? p.type.name : 'T') + '& 或改成按值传参）',
+          expr.line,
+        )
+      }
       // 引用参数与数组参数都要拿到调用方的 lvalue（共享同一份数据）
       argData.push({ lv: yield* resolveTarget(rt, ax, true) })
     } else if (p && p.type.kind !== 'scalar') {
@@ -1349,7 +1647,7 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   for (let i = 0; i < fn.params.length; i++) {
     const p = fn.params[i]
     const d = argData[i]
-    if (p.byRef || p.isArray) {
+    if ((p.byRef || p.isArray) && d && 'lv' in d) {
       // 数组形参绑定为 ref cell：dumpAll 会解引用，面板直接显示真实数组；
       // 函数内的 a[i] 写入落到调用方的 memory，因而调用方可见（真实 C++ 的共享语义）。
       const lv = (d as { lv: LValue }).lv
@@ -1363,7 +1661,8 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       const rv = d && 'rv' in d ? (d as { rv: RV }).rv : ({ type: 'int', v: 0 } as RV)
       newMem.declare(p.name, scalarCell(p.type, rv, expr.line))
     } else {
-      const cell = d && 'lv' in d ? (d as { lv: LValue }).lv.cell : allocFromType(p.type, [], true, rt.structs)
+      const dd = d as { lv?: LValue; rv?: RV } | undefined
+      const cell = dd && dd.lv ? dd.lv.cell : dd && dd.rv && dd.rv.cell ? dd.rv.cell : allocFromType(p.type, [], true, rt.structs)
       newMem.declare(p.name, cell)
     }
   }
@@ -1427,7 +1726,26 @@ const MUTATING_METHODS = [
   'insert', 'erase', 'replace', 'clear', 'resize',
 ]
 
-function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
+function* execMethodCall(rt: Runtime, expr: MethodCallExpr): Generator<Snapshot, RV> {
+  // cin.ignore() / cin.ignore(n, delim)：吃掉字元（cin >> n 之後要清掉換行，這是 getline 的搭檔）
+  if (expr.object.kind === 'ident' && expr.object.name === 'cin') {
+    if (expr.method !== 'ignore') throw new RuntimeError('cin 只支援 ignore()（其他 istream 方法还没做）', expr.line)
+    if (expr.args.length === 0) {
+      if (rt.textPos < rt.inputText.length) rt.textPos++
+      return { type: 'int', v: 0 }
+    }
+    const count = Math.max(0, Math.trunc(num(yield* evalExpr(rt, expr.args[0]), expr.line)))
+    const delim =
+      expr.args.length >= 2 ? String((yield* evalExpr(rt, expr.args[1])).v).charAt(0) : String.fromCharCode(10)
+    let skipped = 0
+    while (skipped < count && rt.textPos < rt.inputText.length) {
+      const ch = rt.inputText.charAt(rt.textPos)
+      rt.textPos++
+      skipped++
+      if (ch === delim) break
+    }
+    return { type: 'int', v: 0 }
+  }
   // 方法的接收者通常是个左值（变量 / 下标 / 成员）；但也允许是临时值，
   // 这样 s.substr(1).size()、to_string(n).size() 这类串接能用（以前会报误导性的「非法的下标访问」）。
   const isTempReceiver = expr.object.kind === 'call' || expr.object.kind === 'method_call'
@@ -2041,6 +2359,24 @@ function* execBlock(rt: Runtime, body: Stmt[]): Generator<Snapshot> {
   for (const s of body) yield* execStmt(rt, s)
 }
 
+// cin >> ... 的共同實作：statement 形式與 while (cin >> x) 條件形式都用它。
+// 回傳 false 代表讀到輸入結束（EOF）—— statement 形式會把它變成明確錯誤，
+// 條件形式則讓迴圈自然結束（C++ 的 istream 轉 bool）。
+function* cinReadTargets(rt: Runtime, targets: Expr[], line: number): Generator<Snapshot, boolean> {
+  for (const target of targets) {
+    const lv = yield* resolveTarget(rt, target, true)
+    if (lv.cell.kind !== 'scalar') throw new RuntimeError('cin 目标应为标量变量', line)
+    const tok = readCinToken(rt, lv.cell.type)
+    if (tok === null) return false
+    rt.inputPos++
+    // char 目標直接吃一個字元（單一字元字串就是 char 的儲存形式）
+    const value = lv.cell.type === 'char' ? tok : coerceTo(lv.cell.type, parseInputValue(tok), line)
+    lv.mem.setScalar(lv.name, lv.path, value)
+    rt.mem.logWrite(lv.name, lv.path)
+  }
+  return true
+}
+
 function* execStmt(rt: Runtime, s: Stmt): Generator<Snapshot> {
   rt.lastLine = s.line
   switch (s.kind) {
@@ -2063,39 +2399,33 @@ function* execStmt(rt: Runtime, s: Stmt): Generator<Snapshot> {
 
     case 'cout':
       for (const item of s.items) {
-        if (item.kind === 'endl') rt.out.push('\n')
-        else {
-          const rv = yield* evalExpr(rt, item.expr)
-          assertScalarRV(rv, s.line)
-          rt.out.push(toStringVal(rv, rt.boolAsInt))
+        if (item.kind === 'endl') {
+          rt.out.push('\n')
+          continue
         }
+        // cout << fixed / setprecision(n)：C++ 的串流操縱子，本身不輸出東西。
+        if (item.expr.kind === 'ident' && item.expr.name === 'fixed') {
+          rt.floatFixed = true
+          continue
+        }
+        if (item.expr.kind === 'call' && item.expr.name === 'setprecision') {
+          if (item.expr.args.length !== 1) throw new RuntimeError('setprecision 需要 1 个参数', s.line)
+          rt.floatPrecision = Math.trunc(num(yield* evalExpr(rt, item.expr.args[0]), s.line))
+          continue
+        }
+        const rv = yield* evalExpr(rt, item.expr)
+        assertScalarRV(rv, s.line)
+        rt.out.push(toStringVal(rv, rt.boolAsInt, { fixed: rt.floatFixed, precision: rt.floatPrecision }))
       }
       yield* mark(rt, s.line)
       break
 
-    case 'cin':
-      for (const target of s.targets) {
-        const raw = rt.input[rt.inputPos]
-        if (raw === undefined) {
-          // 讲清楚「差多少」：不然使用者只能在程式里慢慢找是哪一个 cin 读不完
-          throw new RuntimeError(
-            'cin 输入不足：程式要读第 ' +
-              (rt.inputPos + 1) +
-              ' 个值，但「cin 输入」框只提供了 ' +
-              rt.input.length +
-              ' 个（用空白分隔）',
-            s.line,
-          )
-        }
-        rt.inputPos++
-        const rv = parseInputValue(raw)
-        const lv = yield* resolveTarget(rt, target, true)
-        if (lv.cell.kind !== 'scalar') throw new RuntimeError('cin 目标应为标量变量', s.line)
-        lv.mem.setScalar(lv.name, lv.path, coerceTo(lv.cell.type, rv, s.line))
-        rt.mem.logWrite(lv.name, lv.path)
-      }
+    case 'cin': {
+      // 讲清楚「差多少」：不然使用者只能在程式里慢慢找是哪一个 cin 读不完
+      if (!(yield* cinReadTargets(rt, s.targets, s.line))) throw new RuntimeError(inadequateInputMsg(rt), s.line)
       yield* mark(rt, s.line)
       break
+    }
 
     case 'if': {
       rt.mem.clearAccess()
@@ -2257,6 +2587,11 @@ export function* run(program: Program, opts?: RunOptions): Generator<Snapshot> {
     boolAsInt: opts?.boolAsInt ?? false,
     input: (opts?.input ?? '').split(/\s+/).filter((s) => s.length > 0),
     inputPos: 0,
+    // Windows 的 cin 輸入框會有 \r\n；不正規化的話 getline 讀到的行尾會多一個 \r
+    inputText: (opts?.input ?? '').replace(/\r\n/g, String.fromCharCode(10)),
+    textPos: 0,
+    floatFixed: false,
+    floatPrecision: null,
     structs: program.structs,
     sortInfo: null,
   }
