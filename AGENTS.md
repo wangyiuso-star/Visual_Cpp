@@ -76,6 +76,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.9.0 —— 右侧卡片拖动排序 + 单卡缩放 + 整行宽 + 持久化
 - [x] 「黑屏」防護 —— 已做（`src/components/ErrorBoundary.tsx`：渲染期错误变成「内部错误 + 訊息 + 堆疊 + 重置」的卡片，不再白屏；App 右側面板已包住 + `resetKey={code}`；面板讀 localStorage 包 try/catch（隱私模式下連讀都會拋 SecurityError，而它在 useState 初始化式裡 → 會炸掉整棵樹）；初始化列表尾逗號 `{1,2,3,}` 是合法 C++，已修；test/crash-test.ts 15 項含契約測試）
 - [x] 发布 v0.9.1 —— 黑屏防護 + 尾逗號
+- [x] 卡片放大到 160% 時不夠寬（圖被裁掉 + 橫向捲軸）—— 已做（根因：寬度補償在放大時把卡片佈局寬壓成 1/z，但固定像素的 SVG 不會跟著縮 → 撐出格子。修法：**放大 → 自動佔整行**（`panelLayout.isWide`）+ **圖的 SVG 加 viewBox 與 max-width:100%** 讓它縮進卡片內 + ⤡ 在放大時順便回到 100%（不然按了沒反應）；test/panellayout +5、render-test +3）
+- [x] 发布 v0.9.2 —— 放大時自動佔整行 + 圖自適應寬度
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

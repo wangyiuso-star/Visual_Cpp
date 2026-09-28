@@ -5,6 +5,7 @@ import {
   ZOOM_STEP,
   clampZoom,
   loadLayout,
+  isWide,
   moveKeyBy,
   moveKeyTo,
   serializeLayout,
@@ -273,13 +274,21 @@ export default function VariablesPanel({ snapshot }: Props) {
   function cardView(key: string): CardView {
     return {
       zoom: zoomOf(layout, key),
-      wide: !!layout.wide[key],
+      wide: isWide(layout, key),
       dragging: dragKey === key,
       over: !!dragKey && dragKey !== key && overKey === key,
       onZoom: (steps) =>
         setLayout((prev) => ({ ...prev, zoom: { ...prev.zoom, [key]: clampZoom(zoomOf(prev, key) + steps * ZOOM_STEP) } })),
       onResetZoom: () => setLayout((prev) => ({ ...prev, zoom: { ...prev.zoom, [key]: 1 } })),
-      onToggleWide: () => setLayout((prev) => ({ ...prev, wide: { ...prev.wide, [key]: !prev.wide[key] } })),
+      // 放大超過 100% 時卡片會自動佔整行（見 panelLayout.isWide）。這時按 ⤡ 若只把 wide 設回 false
+      // 畫面不會有任何變化（因為 zoom 還是 >1），會讓人以為按鈕壞了 —— 所以這一按順便把縮放回到 100%。
+      onToggleWide: () =>
+        setLayout((prev) => {
+          if (zoomOf(prev, key) > 1) {
+            return { ...prev, zoom: { ...prev.zoom, [key]: 1 }, wide: { ...prev.wide, [key]: false } }
+          }
+          return { ...prev, wide: { ...prev.wide, [key]: !prev.wide[key] } }
+        }),
       onDragStart: () => {
         setDragKey(key)
         setOverKey(null)
@@ -452,10 +461,10 @@ function CardControls({ card, onMove }: { card: CardView; onMove?: (dir: -1 | 1)
       )}
       <button className="reorder-btn" title="缩小这张卡片" onClick={() => card.onZoom(-1)}>−</button>
       <button className="reorder-btn zoom-pct" title="点一下还原成 100%" onClick={card.onResetZoom}>{pct}%</button>
-      <button className="reorder-btn" title="放大这张卡片" onClick={() => card.onZoom(1)}>＋</button>
+      <button className="reorder-btn" title="放大这张卡片（放大时卡片会自动占整行）" onClick={() => card.onZoom(1)}>＋</button>
       <button
         className="reorder-btn"
-        title={card.wide ? '改成半宽' : '改成整行宽'}
+        title={card.zoom > 1 ? '放大時自動佔整行；按這裡回到 100% 半宽' : card.wide ? '改成半宽' : '改成整行宽'}
         onClick={card.onToggleWide}
       >
         {card.wide ? '⤡' : '⤢'}
@@ -1105,7 +1114,9 @@ function GraphView({
 
   return (
     <div className="graph-scroll">
-      <svg className="graph-svg" width={size} height={size}>
+      {/* viewBox + CSS 的 max-width:100%：卡片放大（zoom）或變窄時，圖會自己縮到卡片寬度內，
+          而不是固定 size px 硬撐出去（那會讓 .graph-scroll 長出橫向捲軸、把後面的節點裁掉）。 */}
+      <svg className="graph-svg" width={size} height={size} viewBox={'0 0 ' + size + ' ' + size}>
         {directed && (
           <defs>
             <marker id={arrowId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">

@@ -1,5 +1,6 @@
 import {
   EMPTY_LAYOUT,
+  isWide,
   ZOOM_MAX,
   ZOOM_MIN,
   clampZoom,
@@ -32,6 +33,15 @@ check('clampZoom 取到两位小数', clampZoom(0.8234) === 0.82, String(clampZo
 check('clampZoom 原值在范围内不动', clampZoom(1.2) === 1.2)
 check('zoomOf 没设定就是 100%', zoomOf(EMPTY_LAYOUT, 'a') === 1)
 check('zoomOf 会夹住存档里的离谱值', zoomOf({ order: [], zoom: { a: 5 }, wide: {} }, 'a') === ZOOM_MAX)
+
+// ---------- 放大 → 自动占整行 ----------
+// 半宽的格子在放大时会被宽度补偿压窄，固定尺寸的内容（例如图）就会撑出横向卷轴，
+// 所以放大超过 100% 的卡片一律占整行。
+check('100% 不占整行', isWide(EMPTY_LAYOUT, 'g') === false)
+check('放大到 160% 自动占整行', isWide({ order: [], zoom: { g: 1.6 }, wide: {} }, 'g') === true)
+check('缩小到 80% 不占整行', isWide({ order: [], zoom: { g: 0.8 }, wide: {} }, 'g') === false)
+check('使用者按过整行宽就一直是整行', isWide({ order: [], zoom: {}, wide: { g: true } }, 'g') === true)
+check('别的卡片的关键字不会互相影响', isWide({ order: [], zoom: { g: 1.6 }, wide: {} }, 'h') === false)
 
 // ---------- 拖动排序 ----------
 eqArr('拖到谁身上就占谁的位置（往前）', moveKeyTo(['a', 'b', 'c'], 'c', 'a'), ['c', 'a', 'b'])

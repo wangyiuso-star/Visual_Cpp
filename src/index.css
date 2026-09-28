@@ -427,7 +427,9 @@ body {
 .map-key { min-width: 68px; color: var(--accent); }
 .map-arrow { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: 13px; }
 .graph-scroll { overflow: auto; max-width: 100%; max-height: 440px; }
-.graph-svg { display: block; }
+/* 圖是向量圖：max-width + height:auto 讓它跟著卡片寬度縮放（有 viewBox 才保得住比例）。
+   沒有這一條的話，卡片放大到 160% 時固定寬度的 SVG 會撐出橫向捲軸、後面的節點被裁掉。 */
+.graph-svg { display: block; max-width: 100%; height: auto; }
 .graph-edge { stroke: #4a5568; stroke-width: 1.5; }
 .graph-edge.read { stroke: var(--read); stroke-width: 2.5; }
 .graph-edge.write { stroke: var(--write); stroke-width: 2.5; }

@@ -26,6 +26,13 @@ export function zoomOf(layout: CardLayout, key: string): number {
   return z === undefined ? 1 : clampZoom(z)
 }
 
+// 这张卡片要不要占整行：使用者自己按过 ⤢，或放大超过 100%。
+// 放大的卡片占整行才有足夠空間（半寬的格子扣掉 zoom 的寬度補償後會比內容量還窄，
+// 固定尺寸的內容就會撐出橫向捲軸）。
+export function isWide(layout: CardLayout, key: string): boolean {
+  return !!layout.wide[key] || zoomOf(layout, key) > 1
+}
+
 // 拖动排序的语义：拖到谁身上，就占谁的位置（其余的顺移）。
 export function moveKeyTo(keys: string[], key: string, target: string): string[] {
   const from = keys.indexOf(key)

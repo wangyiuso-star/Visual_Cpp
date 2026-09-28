@@ -218,6 +218,21 @@ for (const p of PRESETS) {
   check('卡片带 --card-zoom 缩放变数', h.indexOf('--card-zoom') >= 0)
   check('卡片有上下移与整行宽按钮', h.indexOf('border-radius:4px;font-size:11px;padding:2px 5px') >= 0 || (h.match(/reorder-btn/g) || []).length >= 3)
 }
+// ---------- 图的 SVG 要是响应式（有 viewBox，配合 CSS max-width:100%）----------
+// 起因：使用者把图那张卡片放大到 160%，固定宽度的 SVG 撑出去 → 出现横向卷轴、后面的节点被裁掉。
+{
+  const p = PRESETS.find((x: any) => /图/.test(x.name))
+  check('找得到图的 preset', !!p)
+  if (p) {
+    let last: any = null
+    try { for (const s of run(parse(p.code), {})) last = s } catch (e) { check('图的 preset 可执行', false, (e as Error).message) }
+    let h = ''
+    try { h = renderToStaticMarkup(createElement(VariablesPanel, { snapshot: last })) } catch (e) { check('图的 preset 可渲染', false, (e as Error).message) }
+    const m = /class="graph-svg" width="(\d+)" height="(\d+)" viewBox="([^"]+)"/.exec(h)
+    check('图的 svg 带 viewBox（放大时才缩得进卡片）', !!m, h.slice(Math.max(0, h.indexOf('graph-svg') - 20), h.indexOf('graph-svg') + 120))
+    if (m) check('viewBox 与 width/height 一致', m[3] === '0 0 ' + m[1] + ' ' + m[2], m[3] + ' vs ' + m[1] + 'x' + m[2])
+  }
+}
 console.log('-'.repeat(88))
 console.log('==== render-test: ' + pass + ' 通过, ' + fail + ' 失败 ====')
 if (fail > 0) process.exit(1)
