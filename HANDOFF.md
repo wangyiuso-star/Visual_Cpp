@@ -1,6 +1,13 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-16：**v0.6.0 —— 容器可以当值传递**（修掉三个缺口，使用者回报的「回传容器的递归跑不了」就是它們造成的）。
+  - **缺口 A（核心）**：`evalExpr` 的 `ident` / `index` 分支以前直接拒绝容器（`变量 "res" 是容器，不能作为标量使用`）→ 现在回传「带 cell 的容器值」。于是 `m[k]=v`、函数回传容器、容器按值传参、`g[u]` 都能用。**这正是使用者 `return memo[expression]=res;` 的报错来源**（`execAssign` 本来就支援容器赋值，是 evalExpr 先挡掉的）。
+  - **必要守衛**：新增 `assertScalarRV`，在 `num` / `cmp` / `coerceTo` / `execAssign` / `cout` / `+=` 字串分支都拦下容器——**不放宽就会从「明确报错」退化成「静默 0」**（`int x = v`、`string s = v`、`a[0]=v`、`s+=v` 实测都明确报错）。
+  - **缺口 B**：`execDecl` 以前只处理 `array / pair / struct` 的初始化式，其他容器**静默留成空容器**（`vector<int> left = f();` 会得到空的！比报错更危险）→ 现在要求初始化式回传同类容器，否则给「不能用标量初始化 vector」/「初始化类型不匹配」。
+  - **缺口 C**：map 的值是容器时不支援（`scalarName(valueType)` 要求纯量）→ 改用 `allocFromType` 建默认值（纯量情况刻意保持 `value: null` 的原样）；`m[不存在的键].push_back(x)` 照 C++ `operator[]` 会先插入（以前会爆 JS 内部错误 `Cannot read properties of undefined`）。纯读取 `m[k]` 仍维持「不插入」。
+  - **另修**：临时值下标 `f()[0]`（`indexTempCell`）与临时值成员 `mk().x`（原本只支援 `f().first`）。
+  - 新增 `test/container-test.ts`（**28 项**），内含**使用者回报的 LeetCode 241 原题**当回归：`2-1-1` → `2 0`、`2*3-4*5` → `-34 -10 -14 -10 10`。测试档 29 个。
 - 2026-08-16：**v0.5.2 —— 修「cin 输入不足」的偶发 bug（根因是快照失效漏了 cin 输入）+ 错误讯息讲清楚差几个值**。
   - **使用者回报**：偶发出现「cin 输入不足」，**刷新一下就没了**。→ 这种「非决定性 + 刷新即好」通常是状态 bug，不是程式的 token 数问题。
   - **根因**：`collect()` 依赖 `code` / `showIf,showWhile,showFor` / `boolAsInt` / **`input`**；但只有前三个变更时才会 `setSnapshots(null)`，cin 输入框的 `onChange` 只做了 `setInput`。于是「**先按运行（输入框还空着）→ 快照里烙着错误 → 才填输入框 → 快照没失效 → 之后按单步/播放/←→ 都只是重播那个旧错误**」；刷新把 snapshots 清掉才会好。完全对应「偶发 + 刷新即好」。

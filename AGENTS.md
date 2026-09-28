@@ -65,6 +65,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.5.1 —— 收紧字元参数 + substr 越界报错
 - [x] 修「cin 输入不足」偶发 bug —— 已做（**根因：改 cin 输入没有让快照失效**，只有改 code/显示开关才会 → 「先运行再填输入」会重播旧错误、刷新才好；新增 `onInputChange` 一并失效；错误讯息改为讲清楚「要读第 N 个但只有 M 个」；test/cin-test.ts 14 项）
 - [x] 发布 v0.5.2 —— cin 输入失效修正 + 讯息改善
+- [x] 容器当值传递 —— 已做（**修三个缺口**：evalExpr 拒绝容器识别字/下标 → 回传带 cell 的容器值；execDecl 静默忽略容器初始化式 → 要求回传同类容器；map 的值是容器不支援 → allocFromType + operator[] 会插入。另加 `assertScalarRV` 守衛避免放宽后静默变 0；临时值下标 `f()[0]` 与临时成员 `mk().x`；test/container-test.ts 28 项含使用者原题）
+- [x] 发布 v0.6.0 —— 容器可以当值传递（回传 / 赋值 / 按值传参）
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

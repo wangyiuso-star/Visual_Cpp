@@ -120,7 +120,19 @@ function parseInputValue(raw: string): RV {
   return { type: 'string', v: raw }
 }
 
+// 容器不能当标量用。evalExpr 现在会把「容器识别字 / 下标」当成「带 cell 的值」回传，
+// 所以每个「要求标量」的入口都要在这里拦下来——否则会静默变成 0（那比报错更糟）。
+function assertScalarRV(rv: RV, line: number): void {
+  if (rv.cell && rv.cell.kind !== 'scalar') {
+    throw new RuntimeError(
+      '不能把 ' + rv.cell.kind + ' 容器当作标量使用（用下标 / range-for 取出元素，或放到需要容器的位置）',
+      line,
+    )
+  }
+}
+
 function num(rv: RV, line: number): number {
+  assertScalarRV(rv, line)
   if (typeof rv.v === 'number') return rv.v
   if (typeof rv.v === 'boolean') return rv.v ? 1 : 0
   if (typeof rv.v === 'string') {
@@ -211,7 +223,9 @@ function eq(l: RV, r: RV): boolean {
   return Number(l.v) === Number(r.v)
 }
 
-function cmp(l: RV, r: RV): number {
+function cmp(l: RV, r: RV, line = 0): number {
+  assertScalarRV(l, line)
+  assertScalarRV(r, line)
   const a: string | number = typeof l.v === 'string' ? l.v : Number(l.v)
   const b: string | number = typeof r.v === 'string' ? r.v : Number(r.v)
   if (a < b) return -1
@@ -220,6 +234,7 @@ function cmp(l: RV, r: RV): number {
 }
 
 function coerceTo(type: ScalarTypeName, rv: RV, line: number): ScalarValue {
+  assertScalarRV(rv, line)
   if (type === 'string') return toStringVal(rv)
   if (type === 'char') {
     if (rv.type === 'char') return rv.v as string
@@ -234,6 +249,8 @@ function applyBinary(op: string, l: RV, r: RV, line: number): RV {
   switch (op) {
     case '+':
       if (l.type === 'string' || r.type === 'string') {
+        assertScalarRV(l, line)
+        assertScalarRV(r, line)
         return { type: 'string', v: toStringVal(l) + toStringVal(r) }
       }
       return numeric(op, l, r, line, (a, b) => a + b)
@@ -260,13 +277,13 @@ function applyBinary(op: string, l: RV, r: RV, line: number): RV {
     case '!=':
       return { type: 'bool', v: !eq(l, r) }
     case '<':
-      return { type: 'bool', v: cmp(l, r) < 0 }
+      return { type: 'bool', v: cmp(l, r, line) < 0 }
     case '<=':
-      return { type: 'bool', v: cmp(l, r) <= 0 }
+      return { type: 'bool', v: cmp(l, r, line) <= 0 }
     case '>':
-      return { type: 'bool', v: cmp(l, r) > 0 }
+      return { type: 'bool', v: cmp(l, r, line) > 0 }
     case '>=':
-      return { type: 'bool', v: cmp(l, r) >= 0 }
+      return { type: 'bool', v: cmp(l, r, line) >= 0 }
     default:
       throw new RuntimeError('不支持的操作符 "' + op + '"', line)
   }
@@ -317,6 +334,25 @@ function formatExpr(expr: Expr): string {
     default:
       return '?'
   }
+}
+
+// 在「不可定位的临时容器」上取下标（只支援读取）：f()[0]、to_string(n)[0]、g(u)[1]
+function indexTempCell(cell: Cell, idx: number, line: number): Cell {
+  if (cell.kind === 'scalar' && cell.type === 'string') {
+    const s = (cell.value ?? '') as string
+    if (idx < 0 || idx >= s.length) throw new RuntimeError('下标 ' + idx + ' 越界（长度 ' + s.length + '）', line)
+    return { kind: 'scalar', type: 'char', value: s.charAt(idx) }
+  }
+  if (cell.kind === 'tree') {
+    if (idx < 1 || idx > cell.size) throw new RuntimeError('tree 下标 ' + idx + ' 越界（范围 1..' + cell.size + '）', line)
+    return cell.nodes[idx]
+  }
+  if (cell.kind === 'array' || cell.kind === 'vector' || cell.kind === 'deque') {
+    const cells = cell.kind === 'deque' ? cell.items : cell.cells
+    if (idx < 0 || idx >= cells.length) throw new RuntimeError('下标 ' + idx + ' 越界（长度 ' + cells.length + '）', line)
+    return cells[idx]
+  }
+  throw new RuntimeError('这个表达式的结果是 ' + cell.kind + '，不能下标读取', line)
 }
 
 function scalarName(elemType: Type, line: number): ScalarTypeName {
@@ -873,16 +909,23 @@ function* resolveTarget(rt: Runtime, expr: Expr, forWrite = false): Generator<Sn
       const key = coerceTo(keyTypeName, yield* evalExpr(rt, expr.index), expr.line)
       let idx = entryIndex(parent.cell.entries, key)
       if (idx < 0 && forWrite) {
-        const valueTypeName = scalarName(parent.cell.valueType, expr.line)
+        // 值可以是容器（例如 unordered_map<string,vector<int>>）→ 用 allocFromType 建默认值。
+        // 纯量的情况刻意保持原样（value: null = 未初始化），避免改变既有行为。
         const keyCell: Cell = { kind: 'scalar', type: keyTypeName, value: key }
-        const valueCell: Cell = { kind: 'scalar', type: valueTypeName, value: null }
+        const valueCell: Cell =
+          parent.cell.valueType.kind === 'scalar'
+            ? { kind: 'scalar', type: parent.cell.valueType.name, value: null }
+            : allocFromType(parent.cell.valueType, [], true, rt.structs)
         const r = entryInsert(parent.cell.entries, keyCell, valueCell, parent.cell.kind === 'map')
         parent.mem.updateAt(parent.name, parent.path, (cc) => (cc.kind === 'map' || cc.kind === 'umap' ? { ...cc, entries: r.entries } : cc))
         return { name: parent.name, path: parent.path.concat(r.index), cell: r.entries[r.index].value, mem: parent.mem }
       }
       if (idx < 0) {
-        const valueTypeName = scalarName(parent.cell.valueType, expr.line)
-        const def: Cell = { kind: 'scalar', type: valueTypeName, value: null }
+        // 读不存在的键：本工具的既定行为是「不插入」，回一个同类型的默认值
+        const def: Cell =
+          parent.cell.valueType.kind === 'scalar'
+            ? { kind: 'scalar', type: parent.cell.valueType.name, value: null }
+            : allocFromType(parent.cell.valueType, [], true, rt.structs)
         return { name: parent.name, path: parent.path.concat(-1), cell: def, mem: parent.mem }
       }
       return { name: parent.name, path: parent.path.concat(idx), cell: parent.cell.entries[idx].value, mem: parent.mem }
@@ -919,15 +962,33 @@ function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
 
     case 'ident': {
       const lv = yield* resolveTarget(rt, expr)
-      if (lv.cell.kind !== 'scalar') throw new RuntimeError('变量 "' + expr.name + '" 是容器，不能作为标量使用', expr.line)
       rt.mem.logRead(lv.name, lv.path)
+      if (lv.cell.kind !== 'scalar') {
+        // 容器也能当作「一个值」传递：容器赋值（m["a"] = v）、函数回传容器、容器按值传参、
+        // vector<vector> 的 g[u] 都靠这里。类型标记用 int 占位，真正的类型由 cell 携带；
+        // 需要标量的地方会被 assertScalarRV 拦下来（不会静默变成 0）。
+        return { type: 'int', v: 0, cell: lv.cell }
+      }
       return { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
     }
 
     case 'index': {
+      // 临时值也能下标（只支援读取）：f()[0]、to_string(n)[0]、g(u)[1]
+      if (expr.target.kind === 'call' || expr.target.kind === 'method_call') {
+        const rv = yield* evalExpr(rt, expr.target)
+        if (!rv.cell) throw new RuntimeError('这个表达式的结果不能下标读取', expr.line)
+        const idx = toIndex(yield* evalExpr(rt, expr.index), expr.line)
+        const el = indexTempCell(rv.cell, idx, expr.line)
+        return el.kind === 'scalar'
+          ? { type: el.type, v: el.value === null ? defaultScalar(el.type) : el.value }
+          : { type: 'int', v: 0, cell: el }
+      }
       const lv = yield* resolveTarget(rt, expr)
-      if (lv.cell.kind !== 'scalar') throw new RuntimeError('不能把子容器当作标量读取', expr.line)
       rt.mem.logRead(lv.name, lv.strIdx !== undefined ? lv.path.concat(lv.strIdx) : lv.path)
+      if (lv.cell.kind !== 'scalar') {
+        // 子容器（g[u] 是 vector<int>、m[k] 是 vector<int>）同样可以作为值传递
+        return { type: 'int', v: 0, cell: lv.cell }
+      }
       return { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
     }
 
@@ -970,11 +1031,17 @@ function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
 
     case 'member': {
       if (expr.object.kind === 'call' || expr.object.kind === 'method_call') {
+        // 临时值的成员访问：make_pair(1,2).first、mkStruct().x
         const rv = yield* evalExpr(rt, expr.object)
-        if (!rv.cell || rv.cell.kind !== 'pair') throw new RuntimeError('成员访问需要 pair 类型', expr.line)
-        const mem = expr.field === 'first' ? rv.cell.first : rv.cell.second
-        if (mem.kind !== 'scalar') throw new RuntimeError('成员不是标量', expr.line)
-        return { type: mem.type, v: mem.value === null ? defaultScalar(mem.type) : mem.value }
+        const oc = rv.cell
+        if (!oc) throw new RuntimeError('这个表达式的结果不能取成员', expr.line)
+        let mem: Cell | null = null
+        if (oc.kind === 'pair') mem = expr.field === 'first' ? oc.first : expr.field === 'second' ? oc.second : null
+        else if (oc.kind === 'struct') mem = oc.members.find((m) => m.name === expr.field)?.cell ?? null
+        if (!mem) throw new RuntimeError('这个临时值没有成员 "' + expr.field + '"', expr.line)
+        return mem.kind === 'scalar'
+          ? { type: mem.type, v: mem.value === null ? defaultScalar(mem.type) : mem.value }
+          : { type: 'int', v: 0, cell: mem }
       }
       const lv = yield* resolveTarget(rt, expr)
       if (lv.cell.kind !== 'scalar') throw new RuntimeError('成员不是标量', expr.line)
@@ -1033,6 +1100,7 @@ function* execAssign(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   }
   const cur: RV = { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
   const nv = combineAssign(expr.op, cur, value, expr.line)
+  assertScalarRV(nv, expr.line) // a[0] = v 这种「把容器赋给标量元素」必须报错，不能静默写 0
   if (lv.strIdx !== undefined) {
     lv.mem.setStringChar(lv.name, lv.path, lv.strIdx, nv.v)
     rt.mem.logWrite(lv.name, lv.path.concat(lv.strIdx))
@@ -1326,6 +1394,9 @@ function requireStringArg(rv: RV, method: string, line: number): string {
     )
   }
   if (rv.type !== 'string') {
+    if (rv.cell && rv.cell.kind !== 'scalar') {
+      throw new RuntimeError(method + ' 需要字串参数，收到 ' + rv.cell.kind + ' 容器', line)
+    }
     throw new RuntimeError(method + ' 需要字串参数，收到 ' + rv.type + '（可用 to_string 转成字串）', line)
   }
   return rv.v as string
@@ -1354,7 +1425,10 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       cell: rv.cell ?? { kind: 'scalar', type: rv.type, value: rv.v },
     }
   } else {
-    obj = yield* resolveTarget(rt, expr.object)
+    // forWrite = true：方法可能改到接收者。这也让 m[不存在的键].push_back(x) 照 C++ 的
+    // operator[] 语义先插入一个默认值（以前会走到 path -1，爆出 JS 内部错误）。
+    // 纯读取 m[k]（不经方法）仍然维持「不插入」的既定行为。
+    obj = yield* resolveTarget(rt, expr.object, true)
   }
   const method = expr.method
   const c = obj.cell
@@ -1926,6 +2000,14 @@ function* execDecl(rt: Runtime, d: VarDecl): Generator<Snapshot> {
       } else if (cell.kind === 'pair') {
         const rv = yield* evalExpr(rt, d.init)
         if (rv.cell && rv.cell.kind === 'pair') cell = rv.cell
+        else throw new RuntimeError('pair 的初始化式必须回传 pair', line)
+      } else {
+        // 其他容器（vector / map / set / deque / stack / queue / tree / bst）：
+        // 以前这里什么都不做 → 静默留成空容器（比报错更糟）。现在要求初始化式回传同类容器。
+        const rv = yield* evalExpr(rt, d.init)
+        if (!rv.cell) throw new RuntimeError('不能用标量初始化 ' + cell.kind + '（请用会回传同类型容器的表达式）', line)
+        if (rv.cell.kind !== cell.kind) throw new RuntimeError('初始化类型不匹配：' + cell.kind + ' = ' + rv.cell.kind, line)
+        cell = rv.cell
       }
     }
   }
@@ -1960,7 +2042,11 @@ function* execStmt(rt: Runtime, s: Stmt): Generator<Snapshot> {
     case 'cout':
       for (const item of s.items) {
         if (item.kind === 'endl') rt.out.push('\n')
-        else rt.out.push(toStringVal(yield* evalExpr(rt, item.expr), rt.boolAsInt))
+        else {
+          const rv = yield* evalExpr(rt, item.expr)
+          assertScalarRV(rv, s.line)
+          rt.out.push(toStringVal(rv, rt.boolAsInt))
+        }
       }
       yield* mark(rt, s.line)
       break

@@ -32,6 +32,8 @@ npm run dev
 
 **函数**：自定义函数、递归、全局变量、引用参数 `int&`、**数组形参 `int a[]`（共享/别名语义，等同 C++ 数组退化为指针）**、容器按值参数、结构体参数 / 返回值
 
+**容器可以当值传递**（v0.6.0 起）：函数回传容器（`vector<int> f(){ ... return v; }`）、`T x = f();`、把容器赋给容器的元素（`m["k"] = v`，含 `unordered_map<string,vector<int>>`）、按值传容器参数、临时值下标 `f()[0]`、临时值成员 `mk().x`、整行当参数 `f(g[u])`
+
 **内建**：`min` / `max` / `abs` / `make_pair` / `sort` / `reverse` / `lower_bound` / `swap`
 
 **字元函数**：`toupper` / `tolower`（回 char）、`isdigit` / `isalpha` / `isupper` / `islower` / `isalnum` / `isspace`（回 bool）
@@ -93,6 +95,7 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 **语法**
 - 无 `switch`、无三目 `?:`、无位运算（`^` / `&` / `|` / `<<` / `>>`）
 - **支持 range-based for**：`for (int x : v)` / `for (auto x : v)`（值拷贝）/ `for (auto& x : v)`（引用，写回原容器）。可迭代 array / `vector` / `deque` / `set` / `map`（元素是 pair）/ `string`（元素是 char）/ `tree`（1 基层级顺序）/ `bst`（中序＝升序）；`stack` / `queue` / `priority_queue` 在 C++ 里没有 begin/end，会明确报错
+- 容器**不能当标量用**：`int x = v;` / `cout << v;` / `v + 1` / `a[0] = v;` 都会**明确报错**（不会静默变 0）。但注意：真实 C++ 的 `vector` **有** `operator<`（字典序），本工具暂不支援**容器之间的比较**（`v < w` 会报错）
 - **无强制类型转换**：`(double)a` 与 `double(a)` 都不支持（`(int)x` 会被当成函数调用、报「未定义的函数 int」）；`double` 与 `int` 之间的隐式转换可用
 - 无指针、类成员函数 / 构造 / 析构、运算符重载、函数重载、模板
 
