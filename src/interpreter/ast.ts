@@ -104,6 +104,10 @@ export type Expr =
   | { kind: 'cin_expr'; line: number; targets: Expr[] }
   // 強制型別轉換 (int)x / (char)(c+1) / (long long)x。只支援純量型別。
   | { kind: 'cast'; line: number; type: ScalarTypeName; expr: Expr }
+  // 三目運算子 cond ? a : b
+  | { kind: 'ternary'; line: number; cond: Expr; then: Expr; else: Expr }
+  // sizeof(expr) —— 只為了 memset(a, 0, sizeof(a)) 與 sizeof(a)/sizeof(a[0]) 這兩個慣用寫法
+  | { kind: 'sizeof'; line: number; operand: Expr }
   // sort(v, greater<int>()) / sort(v, less<int>()) 的比較子
   | { kind: 'comparator'; line: number; name: 'greater' | 'less' }
 

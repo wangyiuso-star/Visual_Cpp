@@ -205,6 +205,45 @@ function readCinLine(rt: Runtime): string | null {
   return lineText
 }
 
+// 容器长度（不是容器就回 null）
+function containerLen(cell: Cell): number | null {
+  if (cell.kind === 'array') return cell.size
+  if (cell.kind === 'vector') return cell.cells.length
+  if (cell.kind === 'deque' || cell.kind === 'set') return cell.items.length
+  return null
+}
+
+// 認得 OI 最常見的兩種「區間」寫法，把它化簡成「某個容器 + 個數」：
+//   v.begin(), v.end()   → 整個容器
+//   a, a + n             → 前 n 個
+// 認不出來就回 null，讓呼叫端給原本的錯誤訊息（本工具不做真正的迭代器）。
+function* resolveRange(
+  rt: Runtime,
+  first: Expr,
+  second: Expr,
+  line: number,
+): Generator<Snapshot, { lv: LValue; n: number } | null> {
+  const same = (a: Expr, b: Expr) => formatExpr(a) === formatExpr(b)
+  if (first.kind === 'method_call' && first.method === 'begin' && first.args.length === 0) {
+    const e = second
+    if (e.kind === 'method_call' && e.method === 'end' && e.args.length === 0 && same(e.object, first.object)) {
+      const lv = yield* resolveTarget(rt, first.object, true)
+      const len = containerLen(lv.cell)
+      if (len === null) throw new RuntimeError('这个表达式不是容器，不能取 begin() / end()', line)
+      return { lv, n: len }
+    }
+    return null
+  }
+  if (second.kind === 'binary' && second.op === '+' && same(second.left, first)) {
+    const lv = yield* resolveTarget(rt, first, true)
+    const len = containerLen(lv.cell)
+    if (len === null) return null
+    const n = toIndex(yield* evalExpr(rt, second.right), line)
+    return { lv, n: Math.max(0, Math.min(len, n)) }
+  }
+  return null
+}
+
 function inadequateInputMsg(rt: Runtime): string {
   return (
     'cin 输入不足：程式要读第 ' +
@@ -316,6 +355,17 @@ function toIndex(rv: RV, line: number): number {
   return Math.trunc(n)
 }
 
+// <climits> 常見常數
+const BUILTIN_CONSTANTS: Record<string, number> = {
+  INT_MAX: 2147483647,
+  INT_MIN: -2147483648,
+  LLONG_MAX: 9223372036854775807,
+  LLONG_MIN: -9223372036854775808,
+  UINT_MAX: 4294967295,
+  LONG_MAX: 9223372036854775807,
+  LONG_MIN: -9223372036854775808,
+}
+
 function charCode(s: string): number {
   return s.length > 0 ? s.charCodeAt(0) : 0
 }
@@ -353,6 +403,82 @@ function coerceTo(type: ScalarTypeName, rv: RV, line: number): ScalarValue {
   if (type === 'bool') return truthy(rv)
   if (type === 'double' || type === 'float') return num(rv, line)
   return Math.trunc(num(rv, line))
+}
+
+// sizeof 的位元組數。教學上真正需要的只有兩個慣用寫法：
+//   memset(a, 0, sizeof(a))、sizeof(a) / sizeof(a[0])
+// 動態容器（vector / string / set / map…）刻意不支援 —— C++ 的 sizeof(vector) 回的是「物件本身」
+// 的大小（約 24 bytes），不是元素個數；回一個假數字會教出 sizeof(v)/sizeof(v[0]) 這個經典錯誤。
+const SCALAR_BYTES: Record<ScalarTypeName, number> = {
+  char: 1,
+  bool: 1,
+  int: 4,
+  'long long': 8,
+  float: 4,
+  double: 8,
+  string: 32,
+}
+
+const TYPE_NAME_BYTES: Record<string, number> = {
+  int: 4,
+  char: 1,
+  bool: 1,
+  short: 2,
+  long: 8,
+  'long long': 8,
+  double: 8,
+  float: 4,
+  unsigned: 4,
+  size_t: 8,
+}
+
+function dynamicSizeError(line: number): never {
+  throw new RuntimeError(
+    'sizeof 只支援数组 / struct / pair / 纯量。C++ 的 sizeof 用在 vector/string/set/map 上回的是物件大小、不是元素个数（想取个数要用 .size()）',
+    line,
+  )
+}
+
+function typeBytes(rt: Runtime, t: Type, line: number): number {
+  if (t.kind === 'scalar') {
+    if (t.name === 'string') dynamicSizeError(line)
+    return SCALAR_BYTES[t.name]
+  }
+  if (t.kind === 'pair') return typeBytes(rt, t.first, line) + typeBytes(rt, t.second, line)
+  if (t.kind === 'struct') {
+    const def = rt.structs.get(t.name)
+    if (!def) throw new RuntimeError('未定义的结构体 ' + t.name, line)
+    return def.members.reduce((sum, m) => sum + typeBytes(rt, m.type, line), 0)
+  }
+  return dynamicSizeError(line)
+}
+
+function cellBytes(rt: Runtime, cell: Cell, line: number): number {
+  if (cell.kind === 'scalar') {
+    if (cell.type === 'string') dynamicSizeError(line)
+    return SCALAR_BYTES[cell.type]
+  }
+  if (cell.kind === 'array') return cell.size * typeBytes(rt, cell.elemType, line)
+  if (cell.kind === 'pair') return cellBytes(rt, cell.first, line) + cellBytes(rt, cell.second, line)
+  if (cell.kind === 'struct') return cell.members.reduce((sum, m) => sum + cellBytes(rt, m.cell, line), 0)
+  return dynamicSizeError(line)
+}
+
+function* sizeofOperand(rt: Runtime, operand: Expr, line: number): Generator<Snapshot, number> {
+  // sizeof(int) / sizeof(long long)：運算元是型別名
+  if (operand.kind === 'ident') {
+    const byName = TYPE_NAME_BYTES[operand.name]
+    if (byName !== undefined) return byName
+  }
+  const locatable = operand.kind === 'ident' || operand.kind === 'index' || operand.kind === 'member'
+  if (locatable) {
+    const lv = yield* resolveTarget(rt, operand)
+    return cellBytes(rt, lv.cell, line)
+  }
+  const rv = yield* evalExpr(rt, operand)
+  if (rv.cell) return cellBytes(rt, rv.cell, line)
+  if (rv.type === 'string') dynamicSizeError(line)
+  return SCALAR_BYTES[rv.type]
 }
 
 function applyBinary(op: string, l: RV, r: RV, line: number): RV {
@@ -484,6 +610,26 @@ function scalarCmp(a: ScalarValue, b: ScalarValue): number {
 function scalarCell(elemType: Type, rv: RV, line: number): Cell {
   if (elemType.kind !== 'scalar') throw new RuntimeError('该容器暂只支持标量元素', line)
   return { kind: 'scalar', type: elemType.name, value: coerceTo(elemType.name, rv, line) }
+}
+
+// memset 是「逐位元組」填：memset(a, 0x3f, sizeof(a)) 會讓每個 int 變成 0x3f3f3f3f。
+// 這個語意不能省略，否則學生會以為 memset 是把元素設成 0x3f。
+function memsetValue(elemType: Type, byte: number, elemBytes: number, line: number): Cell {
+  if (elemType.kind === 'scalar') {
+    if (elemType.name === 'char') return { kind: 'scalar', type: 'char', value: String.fromCharCode(byte) }
+    if (elemType.name === 'bool') return { kind: 'scalar', type: 'bool', value: byte !== 0 }
+    if (elemType.name === 'double' || elemType.name === 'float') {
+      if (byte !== 0) throw new RuntimeError('memset 非 0 值用在 double/float 上会得到垃圾位元，本工具不模拟（请用 fill 或迴圈）', line)
+      return { kind: 'scalar', type: elemType.name, value: 0 }
+    }
+    if (elemType.name === 'long long') {
+      const v = byte === 0 ? 0 : byte === 255 ? -1 : byte * 0x0101010101010101
+      return { kind: 'scalar', type: 'long long', value: v }
+    }
+    const v = (byte * 0x01010101) | 0
+    return { kind: 'scalar', type: 'int', value: v }
+  }
+  throw new RuntimeError('memset 暂只支援纯量元素的数组 / vector', line)
 }
 
 function elemCell(elemType: Type, rv: RV, line: number): Cell {
@@ -1188,6 +1334,9 @@ function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       return { type: expr.litType, v: expr.value as ScalarValue }
 
     case 'ident': {
+      // <climits> 的常数。long long 用 JS number 存，所以 LLONG_MAX 只有约 2^53 的精度（见 README）。
+      const k = BUILTIN_CONSTANTS[expr.name]
+      if (k !== undefined) return { type: 'int', v: k }
       const lv = yield* resolveTarget(rt, expr)
       rt.mem.logRead(lv.name, lv.path)
       if (lv.cell.kind !== 'scalar') {
@@ -1280,6 +1429,17 @@ function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     case 'cin_expr': {
       const ok = yield* cinReadTargets(rt, expr.targets, expr.line)
       return { type: 'bool', v: ok }
+    }
+
+    // 三目運算子 cond ? a : b（只求值被選中的那一邊）
+    case 'ternary': {
+      const c = yield* evalExpr(rt, expr.cond)
+      return truthy(c) ? yield* evalExpr(rt, expr.then) : yield* evalExpr(rt, expr.else)
+    }
+
+    // sizeof(x)：只為了 memset(a, 0, sizeof(a)) 與 sizeof(a)/sizeof(a[0]) 這兩個慣用寫法
+    case 'sizeof': {
+      return { type: 'int', v: yield* sizeofOperand(rt, expr.operand, expr.line) }
     }
 
     // 強制型別轉換：(int)x / (char)(c + 1) / (long long)x
@@ -1376,8 +1536,23 @@ function* execUpdate(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
 
 function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
   const name = expr.name
+  // 使用者自己定義的函式優先：例如有人把遞迴函式取名 fill（test/arrayparam-test.ts 就是），
+  // 內建不該把使用者的名字搶走。
+  const shadowed = rt.functions.has(name)
 
   if (name === 'min' || name === 'max') {
+    // min({a, b, c}) 這種初始化列表形式也是常見寫法
+    if (expr.args.length === 1 && expr.args[0].kind === 'init_list') {
+      const items = expr.args[0].items
+      if (items.length === 0) throw new RuntimeError(name + '({}) 至少要有一个值', expr.line)
+      let best0 = yield* evalExpr(rt, items[0])
+      for (let i = 1; i < items.length; i++) {
+        const cur = yield* evalExpr(rt, items[i])
+        const c = cmp(cur, best0, expr.line)
+        if ((name === 'min' && c < 0) || (name === 'max' && c > 0)) best0 = cur
+      }
+      return best0
+    }
     if (expr.args.length < 2) throw new RuntimeError(name + ' 需要至少 2 个参数', expr.line)
     let best = yield* evalExpr(rt, expr.args[0])
     for (let i = 1; i < expr.args.length; i++) {
@@ -1394,12 +1569,13 @@ function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
   }
   // <cmath> 的常用函式（Unit 1 §9 數學函式）。C++ 的 sqrt/pow/floor/ceil 都回 double。
   if (
-    name === 'sqrt' ||
+    !shadowed &&
+    (name === 'sqrt' ||
     name === 'pow' ||
     name === 'floor' ||
     name === 'ceil' ||
     name === 'round' ||
-    name === 'fabs'
+    name === 'fabs')
   ) {
     const need = name === 'pow' ? 2 : 1
     if (expr.args.length !== need) throw new RuntimeError(name + ' 需要 ' + need + ' 个参数', expr.line)
@@ -1414,7 +1590,7 @@ function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
     if (name === 'round') return { type: 'double', v: Math.round(a) }
     return { type: 'double', v: Math.abs(a) }
   }
-  if (name === 'getline') {
+  if (name === 'getline' && !shadowed) {
     if (expr.args.length !== 2) throw new RuntimeError('getline 需要 2 个参数：getline(cin, s)', expr.line)
     const src = expr.args[0]
     if (!(src.kind === 'ident' && src.name === 'cin')) {
@@ -1494,18 +1670,58 @@ function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
     }
   }
 
+  if (name === 'memset' && !shadowed) {
+    if (expr.args.length !== 3) throw new RuntimeError('memset 需要 3 个参数：memset(数组, 值, sizeof(数组))', expr.line)
+    const lv = yield* resolveTarget(rt, expr.args[0], true)
+    if (lv.cell.kind !== 'array' && lv.cell.kind !== 'vector') {
+      throw new RuntimeError('memset 的第一个参数要是数组或 vector', expr.line)
+    }
+    const raw = Math.trunc(num(yield* evalExpr(rt, expr.args[1]), expr.line))
+    const bytes = Math.max(0, Math.trunc(num(yield* evalExpr(rt, expr.args[2]), expr.line)))
+    const elemBytes = typeBytes(rt, lv.cell.elemType, expr.line)
+    const count = Math.min(lv.cell.cells.length, Math.ceil(bytes / elemBytes))
+    const byte = ((raw % 256) + 256) % 256
+    const cells = lv.cell.cells.slice()
+    for (let i = 0; i < count; i++) cells[i] = memsetValue(lv.cell.elemType, byte, elemBytes, expr.line)
+    lv.mem.updateAt(lv.name, lv.path, (c0) => (c0.kind === 'array' || c0.kind === 'vector' ? { ...c0, cells } : c0))
+    rt.mem.logWrite(lv.name, lv.path)
+    return { type: 'int', v: 0 }
+  }
+  if (name === 'fill' && !shadowed) {
+    if (expr.args.length !== 3) throw new RuntimeError('fill 需要 3 个参数：fill(v.begin(), v.end(), x) 或 fill(a, a+n, x)', expr.line)
+    const r = yield* resolveRange(rt, expr.args[0], expr.args[1], expr.line)
+    if (!r) throw new RuntimeError('fill 只支援 fill(v.begin(), v.end(), x) 或 fill(a, a+n, x)（本工具不做迭代器）', expr.line)
+    if (r.lv.cell.kind !== 'array' && r.lv.cell.kind !== 'vector') throw new RuntimeError('fill 的目标要是数组或 vector', expr.line)
+    const val = yield* evalExpr(rt, expr.args[2])
+    const item = elemCell(r.lv.cell.elemType, val, expr.line)
+    const cells = r.lv.cell.cells.slice()
+    for (let i = 0; i < r.n; i++) cells[i] = item
+    r.lv.mem.updateAt(r.lv.name, r.lv.path, (c0) => (c0.kind === 'array' || c0.kind === 'vector' ? { ...c0, cells } : c0))
+    rt.mem.logWrite(r.lv.name, r.lv.path)
+    return { type: 'int', v: 0 }
+  }
   if (name === 'sort' || name === 'reverse') {
     if (expr.args.length === 0) throw new RuntimeError(name + ' 需要至少 1 个参数（容器）', expr.line)
     const a0 = expr.args[0]
-    // 迭代器形式（v.begin() / v.end()）不支持，给出明确提示而不是误导性的下标错误
-    if (a0.kind === 'method_call' && (a0.method === 'begin' || a0.method === 'end')) {
-      throw new RuntimeError('不支持迭代器形式，请用 ' + name + '(v) 或 ' + name + '(v, n)', expr.line)
+    // OI 常見的區間寫法：sort(v.begin(), v.end()) / sort(a, a+n)（含帶比較子的版本）
+    const range = expr.args.length >= 2 ? yield* resolveRange(rt, expr.args[0], expr.args[1], expr.line) : null
+    if (!range && a0.kind === 'method_call' && (a0.method === 'begin' || a0.method === 'end')) {
+      throw new RuntimeError(
+        '不支持这种迭代器形式：请用 ' + name + '(v) / ' + name + '(v, n)，或 ' + name + '(v.begin(), v.end())',
+        expr.line,
+      )
     }
     // 参数形态：sort(v) / sort(v, n) / sort(v, cmp) / sort(v, n, cmp)；reverse 只有 (v) / (v, n)
     let cmpName: string | null = null
     let builtinCmp: 'greater' | 'less' | null = null
     let countArg: Expr | undefined
-    if (name === 'sort' && expr.args.length >= 2) {
+    if (range && name === 'sort' && expr.args.length >= 3) {
+      // sort(v.begin(), v.end(), cmp) / sort(a, a+n, greater<int>())
+      const a = expr.args[2]
+      if (a.kind === 'comparator') builtinCmp = a.name
+      else if (a.kind === 'ident' && rt.functions.has(a.name)) cmpName = a.name
+      else throw new RuntimeError('sort 的第三个参数应是比较子（cmp 或 greater<int>()）', expr.line)
+    } else if (name === 'sort' && expr.args.length >= 2) {
       // 參數形式：sort(v) / sort(v, n) / sort(v, cmp) / sort(v, n, cmp)（cmp 可以是函式名或 greater<int>()）
       for (let k = 1; k < expr.args.length; k++) {
         const a = expr.args[k]
@@ -1527,11 +1743,11 @@ function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
         }
       }
     } else if (name === 'reverse' && expr.args.length >= 3) {
-      throw new RuntimeError('reverse 只接受 reverse(v) 或 reverse(v, n)', expr.line)
-    } else {
+      throw new RuntimeError('reverse 只接受 reverse(v) / reverse(v, n) / reverse(v.begin(), v.end())', expr.line)
+    } else if (!range) {
       countArg = expr.args[1]
     }
-    const lv = yield* resolveTarget(rt, a0, true)
+    const lv = range ? range.lv : yield* resolveTarget(rt, a0, true)
     if (lv.cell.kind === 'scalar' && lv.cell.type === 'string') {
       if (name === 'sort') throw new RuntimeError('sort 不支持 string，请用 reverse', expr.line)
       const s = (lv.cell.value ?? '') as string
@@ -1541,7 +1757,11 @@ function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
     }
     if (lv.cell.kind !== 'array' && lv.cell.kind !== 'vector') throw new RuntimeError(name + ' 需要数组或 vector', expr.line)
     const len = lv.cell.cells.length
-    const n = countArg ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, countArg), expr.line))) : len
+    const n = range
+      ? range.n
+      : countArg
+        ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, countArg), expr.line)))
+        : len
     let part = lv.cell.cells.slice(0, n)
     if (name === 'sort') {
       if (cmpName) {
@@ -1575,16 +1795,21 @@ function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
   if (name === 'lower_bound') {
     if (expr.args.length < 2) throw new RuntimeError('lower_bound 需要 2 个参数 (v, x) 或 3 个参数 (v, n, x)', expr.line)
     const a0 = expr.args[0]
-    if (a0.kind === 'method_call' && (a0.method === 'begin' || a0.method === 'end')) {
-      throw new RuntimeError('不支持迭代器形式，请用 lower_bound(v, x) 或 lower_bound(v, n, x)', expr.line)
+    // 区间写法：lower_bound(v.begin(), v.end(), x) / lower_bound(a, a+n, x)
+    const range = expr.args.length >= 3 ? yield* resolveRange(rt, expr.args[0], expr.args[1], expr.line) : null
+    if (!range && a0.kind === 'method_call' && (a0.method === 'begin' || a0.method === 'end')) {
+      throw new RuntimeError(
+        '不支持这种迭代器形式：请用 lower_bound(v, x) / lower_bound(v, n, x)，或 lower_bound(v.begin(), v.end(), x)',
+        expr.line,
+      )
     }
-    const lv = yield* resolveTarget(rt, a0)
+    const lv = range ? range.lv : yield* resolveTarget(rt, a0)
     if (lv.cell.kind !== 'array' && lv.cell.kind !== 'vector') throw new RuntimeError('lower_bound 需要数组或 vector', expr.line)
     const len = lv.cell.cells.length
-    // 两种形式：lower_bound(v, x) 全区间；lower_bound(v, n, x) 前 n 个
-    const hasN = expr.args.length >= 3
-    const n = hasN ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line))) : len
-    const x = yield* evalExpr(rt, expr.args[hasN ? 2 : 1])
+    // 三种形式：lower_bound(v, x) 全区间；lower_bound(v, n, x) 前 n 个；区间写法
+    const hasN = !range && expr.args.length >= 3
+    const n = range ? range.n : hasN ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line))) : len
+    const x = yield* evalExpr(rt, expr.args[range ? 2 : hasN ? 2 : 1])
     const xCell: Cell = x.cell ?? { kind: 'scalar', type: x.type, value: x.v }
     for (let i = 0; i < n; i++) {
       if (cellOrder(lv.cell.cells[i], xCell, expr.line) >= 0) {
@@ -1723,13 +1948,21 @@ function requireStringArg(rv: RV, method: string, line: number): string {
 // 会改到容器的那些方法：不能让它们作用在临时值上（否则改了也没人看得见）
 const MUTATING_METHODS = [
   'push_back', 'pop_back', 'push_front', 'pop_front', 'push', 'pop',
-  'insert', 'erase', 'replace', 'clear', 'resize',
+  'insert', 'erase', 'replace', 'clear', 'resize', 'assign',
 ]
 
 function* execMethodCall(rt: Runtime, expr: MethodCallExpr): Generator<Snapshot, RV> {
   // cin.ignore() / cin.ignore(n, delim)：吃掉字元（cin >> n 之後要清掉換行，這是 getline 的搭檔）
   if (expr.object.kind === 'ident' && expr.object.name === 'cin') {
-    if (expr.method !== 'ignore') throw new RuntimeError('cin 只支援 ignore()（其他 istream 方法还没做）', expr.line)
+    // cin.get()：讀下一個字元（含空白，這點跟 cin >> c 不同），到檔案尾回空字元
+    if (expr.method === 'get') {
+      if (expr.args.length !== 0) throw new RuntimeError('cin.get() 不接受参数（cin.get(buf, n) 还没做）', expr.line)
+      if (rt.textPos >= rt.inputText.length) return { type: 'char', v: '' }
+      const ch = rt.inputText.charAt(rt.textPos)
+      rt.textPos++
+      return { type: 'char', v: ch }
+    }
+    if (expr.method !== 'ignore') throw new RuntimeError('cin 只支援 ignore() / get()（其他 istream 方法还没做）', expr.line)
     if (expr.args.length === 0) {
       if (rt.textPos < rt.inputText.length) rt.textPos++
       return { type: 'int', v: 0 }
@@ -1769,6 +2002,14 @@ function* execMethodCall(rt: Runtime, expr: MethodCallExpr): Generator<Snapshot,
   }
   const method = expr.method
   const c = obj.cell
+
+  // 本工具不做迭代器。直接寫 v.begin() / v.end()（沒有包在 sort/fill 的區間寫法裡）就在這裡給指引。
+  if (method === 'begin' || method === 'end') {
+    throw new RuntimeError(
+      '本工具不做迭代器（' + method + '()）。走訪整個容器用 range-for：for (auto& x : v)；取長度用 v.size()；set/map 判斷存在用 s.count(x) > 0',
+      expr.line,
+    )
+  }
 
   if (c.kind === 'scalar' && c.type === 'string') {
     const s = (c.value ?? '') as string
@@ -1918,6 +2159,18 @@ function* execMethodCall(rt: Runtime, expr: MethodCallExpr): Generator<Snapshot,
       rt.mem.logRead(obj.name, obj.path.concat(idx))
       const el = c.cells[idx]
       return el.kind === 'scalar' ? { type: el.type, v: el.value === null ? defaultScalar(el.type) : el.value } : { type: 'int', v: 0, cell: el }
+    }
+    if (method === 'assign') {
+      // v.assign(n, x)：把內容換成 n 個 x（C++ 的 assign(count, value) 形式）
+      if (expr.args.length !== 2) throw new RuntimeError('assign 需要 2 个参数 (n, x)', expr.line)
+      const n = Math.max(0, toIndex(yield* evalExpr(rt, expr.args[0]), expr.line))
+      const val = yield* evalExpr(rt, expr.args[1])
+      const item = elemCell(c.elemType, val, expr.line)
+      const cells: Cell[] = []
+      for (let i = 0; i < n; i++) cells.push(item)
+      obj.mem.updateAt(obj.name, obj.path, () => ({ ...c, cells }))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
     }
     if (method === 'resize') {
       if (expr.args.length < 1) throw new RuntimeError('resize 需要至少 1 个参数', expr.line)

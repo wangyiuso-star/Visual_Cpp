@@ -17,7 +17,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - test/run.ts — 解释器冒烟测试
 
 ## 关键约定
-- 构建/运行（Windows 沙箱必加 sandbox_permissions="danger-full-access"，否则 Vite spawn 原生二进制 EPERM）：
+- 构建/运行：一般直接跑即可。**注意政策會變**：2026-08-17 起本會話的檔案政策是 `danger-full-access` 且核准提示已停用 → **不要再傳 `sandbox_permissions`（會被自動拒絕）**；若哪天回到 workspace-write，Vite/rolldown/node/git 這類要 spawn 子程序的指令才需要加 `sandbox_permissions="danger-full-access"`。
   - npm run build（改完必重新构建）
   - npm run dev（后台 job；改完 kill 旧 job 再重启，然后探 http://localhost:5173/ 期待 200）
 - 验证：改后 npm run build 应 exit 0 → 重启 dev → Invoke-WebRequest 探 200。
@@ -71,6 +71,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.6.1 —— 容器当值摘要修正
 - [x] HKOI 缺口提案第一优先 —— 已做（**输入模型改成游标**：`while (cin >> x)` 读到 EOF、`getline`、`cin >> char`、`cin.ignore()`；C 风格转型 `(int)/(char)/(long long)`；`sqrt/pow/floor/ceil`；`sort(v, greater<int>())`；`fixed + setprecision(n)`；`const T&` 参数；**字符算术** `c-'a'`/`c+1`/`c-32`（含赋值与 ++/-- 照目标型别隐式转换）；容器与 pair 比较（含 `sort(vector<pair>)`）；test/gap-test.ts 92 项）
 - [x] 发布 v0.7.0 —— HKOI 缺口提案第一优先
+- [x] HKOI 缺口提案第二优先 —— 已做（`#define`（物件式巨集，文字層展開，等長空白保留行號）、`typedef` / `using` 型別別名、`size_t`、三目 `?:`、`sizeof`（動態容器刻意不支援並給教學說明）、`memset`（逐位元組語意）、`fill` / `v.assign` / `min({...})` / `INT_MAX` / `cin.get()`、區間寫法 `sort(v.begin(),v.end())` / `sort(a,a+n)` / `lower_bound(a,a+n,x)`；**踩坑：內建 `fill` 搶走使用者自訂函式名 → 加 `shadowed` 守衛，使用者函式優先**；test/gap-test.ts 127 項）
+- [x] 发布 v0.8.0 —— HKOI 缺口提案第二优先
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

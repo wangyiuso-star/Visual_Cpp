@@ -37,6 +37,8 @@ export function parse(src: string): Program {
 class Parser {
   tokens: Token[]
   pos = 0
+  // typedef / using 建立的型別別名（例如 typedef long long ll;）
+  typeAliases = new Map<string, Type>()
   structs = new Map<string, StructDef>()
   structNames = new Set<string>()
 
@@ -127,8 +129,26 @@ class Parser {
     const functions = new Map<string, FunctionDef>()
     let mainBody: Stmt[] | null = null
     while (this.cur().type !== 'eof') {
-      if (this.isIdent('using') || this.isIdent('typedef')) {
-        this.skipToSemi()
+      if (this.isIdent('typedef')) {
+        this.next()
+        const t = this.parseType()
+        const alias = this.expectIdent().value
+        this.expectSemi()
+        this.typeAliases.set(alias, t)
+        continue
+      }
+      if (this.isIdent('using')) {
+        // using namespace std; 照舊跳過；using ll = long long; 才是型別別名
+        if (this.cur(1).value === 'namespace') {
+          this.skipToSemi()
+          continue
+        }
+        this.next()
+        const alias = this.expectIdent().value
+        this.expectOp('=')
+        const t = this.parseType()
+        this.expectSemi()
+        this.typeAliases.set(alias, t)
         continue
       }
       if (this.isIdent('struct')) {
@@ -485,7 +505,9 @@ class Parser {
       return n === 'int' || n === 'long' || n === 'char'
     }
     if (t.value === 'unsigned') return true
+    if (t.value === 'size_t') return true
     if (this.structNames.has(t.value)) return true
+    if (this.typeAliases.has(t.value)) return true
     return false
   }
 
@@ -575,6 +597,12 @@ class Parser {
     if (this.isIdent('std')) {
       this.next()
       this.expectOp('::')
+    }
+    // typedef / using 的別名（ll → long long）
+    if (this.cur().type === 'ident' && this.typeAliases.has(this.cur().value)) {
+      const t = this.typeAliases.get(this.cur().value)!
+      this.next()
+      return t
     }
     if (this.isIdent('vector')) {
       this.next()
@@ -705,6 +733,7 @@ class Parser {
       }
       return 'long long'
     }
+    if (this.eatIdent('size_t')) return 'int'
     if (this.eatIdent('int')) return 'int'
     if (this.eatIdent('char')) return 'char'
     if (this.eatIdent('bool')) return 'bool'
@@ -719,13 +748,26 @@ class Parser {
   }
 
   parseAssignment(): Expr {
-    const left = this.parseBinary(0)
+    const left = this.parseTernary()
     if (this.cur().type === 'op' && ASSIGN_OPS.includes(this.cur().value)) {
       const op = this.next().value
       const right = this.parseAssignment()
       return { kind: 'assign', line: left.line, op, target: left, value: right }
     }
     return left
+  }
+
+  // 三目運算子 cond ? a : b（右結合；優先序在 || 之上、賦值之下）
+  parseTernary(): Expr {
+    const cond = this.parseBinary(0)
+    if (this.isOp('?')) {
+      const line = this.next().line
+      const then = this.parseExpr()
+      this.expectOp(':')
+      const elseExpr = this.parseTernary()
+      return { kind: 'ternary', line, cond, then, else: elseExpr }
+    }
+    return cond
   }
 
   parseBinary(minPrec: number): Expr {
@@ -744,6 +786,18 @@ class Parser {
 
   parseUnary(): Expr {
     const t = this.cur()
+    // sizeof(a) / sizeof a。運算元若是型別名（sizeof(int)）就當成「該型別的大小」，
+    // 所以包一個假的 ident 節點，由直譯器判斷是不是型別。
+    if (t.type === 'ident' && t.value === 'sizeof') {
+      this.next()
+      if (this.isOp('(')) {
+        this.next()
+        const inner = this.parseExpr()
+        this.expectOp(')')
+        return { kind: 'sizeof', line: t.line, operand: inner }
+      }
+      return { kind: 'sizeof', line: t.line, operand: this.parseUnary() }
+    }
     if (t.type === 'op' && (t.value === '-' || t.value === '!')) {
       this.next()
       return { kind: 'unary', line: t.line, op: t.value, operand: this.parseUnary() }

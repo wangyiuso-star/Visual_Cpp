@@ -38,6 +38,10 @@ npm run dev
 
 **数学函数**：`sqrt` / `pow` / `floor` / `ceil` / `round` / `fabs`（都回 double，照 C++ 语义）
 
+**数组工具（v0.8.0）**：`memset(a, v, sizeof(a))`（**逐位元组**，`memset(a,0x3f,sizeof(a))` 会让每个 int 变 `0x3f3f3f3f`，这是 C++ 的真实语义）、`fill(v.begin(), v.end(), x)` / `fill(a, a+n, x)`、`v.assign(n, x)`、`min({a,b,c})` / `max({a,b,c})`、`INT_MAX` / `INT_MIN`（另 `LLONG_MAX` / `UINT_MAX` 等）
+
+**区间写法（v0.8.0）**：`sort(v.begin(), v.end())` / `sort(a, a+n)` / `sort(a, a+n, greater<int>())` / `reverse(v.begin(), v.end())` / `lower_bound(v.begin(), v.end(), x)` / `fill(a, a+n, x)` 都会化简成「整个容器 / 前 n 个」。**除了这些固定搭配，本工具不做迭代器**（`v.begin()` 单独出现会给出指引：用 range-for 或 `.size()`）
+
 **输入**：`getline(cin, s)`（读一整行含空白）、`cin >> c`（单一字元）、`cin.ignore()` / `cin.ignore(n, c)`、`while (cin >> x)`（读到 EOF）
 
 **类型转换**：C 风格 `(int)x` / `(char)(c+1)` / `(long long)x` / `(double)a/b`
@@ -103,7 +107,9 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 > 这份清单由 `test/compat-test.ts`（63 项断言）逐条锁定，改动解释器后跑它即可验证。新功能的细节另有 `test/gap-test.ts`（92 项）。
 
 **语法**
-- 无 `switch`、无三目 `?:`、无位运算（`^` / `&` / `|` / `<<` / `>>`）
+- **支持三目 `?:`**（v0.8.0，只求值被选中的那一边）；**无 `switch`**、**无位运算**（`^` / `&` / `|` / `<<` / `>>`）、无 lambda、无默认参数、无函数重载、无 `for` 标头里的逗号表达式
+- **支持 `#define`（物件式巨集，v0.8.0）**：`#define MAXN 100005`、`#define N 10` 这类文字展开；函式式巨集（`#define f(x) ...`）忽略。**支持 `typedef` / `using ll = long long;`**（型别别名，`vector<ll>` 也通）；`size_t` 当 `int`
+- **支持 `sizeof`（v0.8.0）**：`sizeof(a)`、`sizeof(int)`、`sizeof(a)/sizeof(a[0])`、struct（成员相加，不算对齐填充）。`sizeof(vector/string/set)` **刻意不支援** —— C++ 回的是物件大小（约 24 bytes）而不是元素个数，回一个假数字会教出 `sizeof(v)/sizeof(v[0])` 这个经典错误，工具会直接说明并要你用 `.size()`
 - **支持 range-based for**：`for (int x : v)` / `for (auto x : v)`（值拷贝）/ `for (auto& x : v)`（引用，写回原容器）。可迭代 array / `vector` / `deque` / `set` / `map`（元素是 pair）/ `string`（元素是 char）/ `tree`（1 基层级顺序）/ `bst`（中序＝升序）；`stack` / `queue` / `priority_queue` 在 C++ 里没有 begin/end，会明确报错
 - 容器**不能当标量用**：`int x = v;` / `cout << v;` / `v + 1` / `a[0] = v;` 都会**明确报错**（不会静默变 0）
 - **容器的比较可用（v0.7.0）**：`vector` / `deque` / `set` / `pair` / `map` 之间有 C++ 的 `==` / `!=` / `<` / `<=` / `>` / `>=`（字典序），元素也可以是容器（`vector<vector<int>>` 能比、能 `sort`）。`unordered_map` 只能比相等（它没有顺序）。**特例**：C 数组的 `a == b` 在真实 C++ 比的是指针地址，工具不假装它是逐元素比较，会明确说明；`stack` / `queue` / `priority_queue` 不支援

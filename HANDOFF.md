@@ -1,6 +1,16 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**v0.8.0 —— HKOI 缺口提案的第二優先（他列為「有替代、不急」的那批，一次補齊）**。
+  - **`#define`（物件式巨集）**：本工具沒有前置處理器，所以在 `tokenize` 之前加一趟文字層展開 `expandDefines(src)`。第一趟把所有井號開頭的行拿掉（`#include` 本來就被忽略），遇到 `#define NAME 內容` 就記下來；**用等長空白取代，行號/欄號不變**（錯誤訊息位置才對得上）。第二趟掃識別字換掉（跳過字串/字元常數與註解，最多 5 趟支援巨集套巨集）。`#define f(x) …`（名稱後緊接 `(`）＝函式式巨集，忽略。
+  - **`typedef` / `using 別名`**：以前只是 `skipToSemi()` 跳過（所以 `typedef long long ll;` 不會報錯，但 `ll x;` 會壞）。現在 Parser 有 `typeAliases: Map<string, Type>`，`parseProgram` 真的解析 `typedef T NAME;` 與 `using NAME = T;`（`using namespace std;` 仍然跳過），`isTypeStart` / `parseType` 都查別名 → `ll x`、`vector<ll>` 都能用。`size_t` 當 `int`（`parseScalarTypeName` + `isTypeStart`）。
+  - **三目運算子 `?:`**：`parseTernary()` 插在 `parseAssignment` 與 `parseBinary` 之間（右結合）；新增 `ternary` 節點，只求值被選中的那一邊。
+  - **`sizeof` + `memset`**：新增 `sizeof` 節點（`sizeof(a)` / `sizeof(int)` / `sizeof a`）。`sizeof` 只認「陣列 / struct / pair / 純量」；**動態容器刻意不支援**（C++ 的 `sizeof(vector)` 是物件大小 ≈24 bytes 而不是元素個數，回假數字會教出 `sizeof(v)/sizeof(v[0])` 的經典錯誤，所以直接給教學說明並要你用 `.size()`）。`memset` 照 **逐位元組**語意（`memset(a,0x3f,sizeof(a))` → 每個 int 是 `0x3f3f3f3f` = 1061109567，不是 63）；`double/float` 填非 0 會得到垃圾位元 → 明確報錯。
+  - **區間寫法**：新增 `resolveRange()`，把 `v.begin(), v.end()`（整個容器）與 `a, a+n`（前 n 個）化簡成「容器 + 個數」，於是 `sort(v.begin(), v.end())`、`sort(a, a+n)`、`sort(a, a+n, greater<int>())`、`reverse(v.begin(), v.end())`、`lower_bound(v.begin(), v.end(), x)`、`fill(a, a+n, x)` 都能跑（以前全部報「不支持迭代器形式」）。**除了這些固定搭配仍然不做迭代器**，`v.begin()` 單獨出現會給指引（range-for / `.size()` / `s.count(x) > 0`）。
+  - **其他**：`fill(v.begin(), v.end(), x)`、`v.assign(n, x)`、`min({a,b,c})` / `max({a,b,c})`、`INT_MAX` / `INT_MIN`（另 `LLONG_MAX` / `UINT_MAX` / `LONG_MAX`）、`cin.get()`（讀字元含空白，與 `cin >> c` 不同）。
+  - ⚠️ **踩到的坑（值得記）**：把 `fill` 做成內建之後，`test/arrayparam-test.ts` 裡那個**使用者自己取名 `fill` 的遞迴函式**被內建搶走了（它把 `fill(b,0,4)` 當成 std::fill）。修法：`execCall` 開頭算 `shadowed = rt.functions.has(name)`，我新加的內建（`memset` / `fill` / `getline` / 數學函式）都加 `!shadowed` 守衛 —— **使用者自己定義的函式優先**。
+  - 測試：`test/gap-test.ts` 92 → **127 項**（新增第二優先那批，含 `sizeof(a)/sizeof(a[0])`、`memset 0x3f = 1061109567`、`sort(a,a+n)` 只排前 n 個、`#define` 名稱在字串/註解裡不被替換、`sizeof(vector)` 的教學錯誤訊息）；`compat-test` 63 → 68 項（`sort(v.begin(),v.end())` / 三目 / `cin.get()` / `using` 從「不可用」翻到「可用」）。**31 個測試檔全過、0 跳過**。
+  - 仍未做（第三優先，提案說少用）：`switch`、lambda、預設參數、函式多載、`for` 標頭的逗號運算式、`__builtin_popcount`（位元運算永久排除）、`cin.get(buf, n)`、`fill` 之外的迭代器用法。
 - 2026-08-17：**v0.7.0 —— 實作 HKOI 教材編輯的缺口提案（第一優先 6 項 + 兩個粗糙邊 + 字元算術）**。提案：`_工作檔/工作紀錄/13-給VisualCode的缺口提案.md`（他從 17 份教材反推、57 條實測：可用 28 / 不支援 29）。我把 57 條全部重跑一遍驗證，他的清單基本準確。
   - **1.1 `while (cin >> x)` 讀到 EOF**（他說這是唯一「不補就沒辦法好好上課」的兩項之一）。**根因是輸入模型**：舊版只有 `input: string[]`（用 `split(/\s+/)` 切好的 token），換行資訊早就沒了 → getline 根本不可能實作。改成**游標模型**：留原始字串 `inputText` + `textPos`，`cin >>` 跳過空白讀一個 token（**char 目標只吃一個字元**，照 C++ 的 char 重載），`getline` 讀到下一個 `\n`。新增 AST 節點 `cin_expr`（`cin >> x` 當運算式）：EOF 回 `false`，於是 `while (cin >> x)`、`while (!(cin >> x))`、`if (cin >> x)` 都能用；**語句形式 `cin >> a >> b;` 讀不足仍然是明確錯誤**（保留 v0.5.2 的「要读第 N 个值」訊息，兩種形式共用 `cinReadTargets`）。另加 `cin.ignore()` / `cin.ignore(n, c)`（getline 的搭檔），Windows 的 `\r\n` 會正規化。
   - **1.2 `getline(cin, s)` + `cin >> char`**：教材用量最大（10 次）。C++ 的經典行為**照實呈現**：`cin >> n; getline(cin, s);` 讀到**空字串**（換行還在緩衝區），要接 `cin.ignore()`——這是教學點，不是 bug，測試裡有一條專門鎖它。
