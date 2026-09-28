@@ -28,7 +28,7 @@ npm run dev
 - `struct`（定义、成员读写、初始化、作参数、作返回值）
 - 容器存结构体：`array` / `tree` / `vector` 里放 struct
 
-**语句**：声明、赋值（`= += -= *= /= %=`）、`++` / `--`、`for` / `while` / `do-while` / `if-else` / `break` / `continue` / `return` / `cout` / `cin`
+**语句**：声明、赋值（`= += -= *= /= %=`）、`++` / `--`、`for` / **范围 for `for (T x : c)`** / `while` / `do-while` / `if-else` / `break` / `continue` / `return` / `cout` / `cin`
 
 **函数**：自定义函数、递归、全局变量、引用参数 `int&`、**数组形参 `int a[]`（共享/别名语义，等同 C++ 数组退化为指针）**、容器按值参数、结构体参数 / 返回值
 
@@ -84,7 +84,7 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 
 **语法**
 - 无 `switch`、无三目 `?:`、无位运算（`^` / `&` / `|` / `<<` / `>>`）
-- 无 `auto`、无 range-based for（`for (int x : v)`）——迭代器与 <algorithm> 迭代器形式全部不支持
+- **支持 range-based for**：`for (int x : v)` / `for (auto x : v)`（值拷贝）/ `for (auto& x : v)`（引用，写回原容器）。可迭代 array / `vector` / `deque` / `set` / `map`（元素是 pair）/ `string`（元素是 char）/ `tree`（1 基层级顺序）/ `bst`（中序＝升序）；`stack` / `queue` / `priority_queue` 在 C++ 里没有 begin/end，会明确报错
 - **无强制类型转换**：`(double)a` 与 `double(a)` 都不支持（`(int)x` 会被当成函数调用、报「未定义的函数 int」）；`double` 与 `int` 之间的隐式转换可用
 - 无指针、类成员函数 / 构造 / 析构、运算符重载、函数重载、模板
 

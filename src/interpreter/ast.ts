@@ -77,6 +77,9 @@ export type Stmt =
   | { kind: 'while'; line: number; cond: Expr; body: Stmt }
   // condLine = while 关键字所在行（快照要在「body 跑完、尚未求值条件」时高亮这一行）
   | { kind: 'do'; line: number; condLine: number; cond: Expr; body: Stmt }
+  // C++11 范围 for：for (T x : c) / for (auto x : c) / for (auto& x : c)
+  // declType === null 代表 auto（元素类型由容器推断）
+  | { kind: 'range_for'; line: number; declType: Type | null; byRef: boolean; name: string; iter: Expr; body: Stmt }
   | { kind: 'break'; line: number }
   | { kind: 'continue'; line: number }
   | { kind: 'return'; line: number; value?: Expr }

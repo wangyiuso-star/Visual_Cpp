@@ -1,6 +1,14 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-16：**v0.3.0 —— range-based for**（`for (int x : v)` / `for (auto x : v)` / `for (auto& x : v)`）。
+  - 实作：`ast.ts` 新增 `range_for` 节点（`declType === null` 表示 auto）；`parser.ts` 在 `parseFor` 开头做**向前扫描 lookahead**（depth 0 先遇 `:` 即范围 for，先遇 `;`/`)` 则维持经典 for）——lexer **不用动**（`:` 本来就在 OPS1）；`interpreter.ts` 新增 `case 'range_for'` + `rangeForSequence()`。
+  - 可迭代：array / vector / deque / set / map(元素是 pair) / string(元素是 char) / tree(1 基层级顺序) / bst(中序遍历＝升序)；stack / queue / priority_queue **明确报错**（C++ 没有 begin/end）。容器必须是可定位的变数或其下标/成员（`g[u]` 可以）。
+  - 语义：`auto`/显式类型是**值拷贝**（cell 不可变，天然如此）；`auto&` 绑成 ref cell，写入回到原容器 → 正好是 Unit 8 §7「共享 vs 拷贝」的循环版。范围在进入循环时固定（end 只取一次，与 C++ 一致）。每个元素产生一个快照。
+  - ⚠️ **耦合**：`auto&` 用 ref cell 实作，而「参数（别名）」徽章原本靠「是 ref cell」判定 → 会给循环变数误标。已给 ref cell 加 `origin: 'param' | 'loop'`，徽章只认 `param`（`test/aliasbadge-test.ts` 第 7 组断言锁住）。
+  - 新增 `test/rangefor-test.ts`（30 项）。`test/compat-test.ts` 的 range-for 由「不可用」翻为「可用」（一般 `auto x = 5;` 仍不可用）。
+  - 顺带修：**tag `v0.2.2` 原本指向 `127cae6`（＝v0.2.1）**，是「先打 tag、后 commit」造成的；已删除重打在 `6fa7def` 并推送。**教训：tag 要在 commit 之后打。**
+  - 另一条教训（对方发现）：`test/hkoi-presets-test.ts` 的跨专案路径原本写成 `HKOI_teaching/presets/`，实际资料夹是 `VisualCode-preset/` → 该测试**从加入起一直被 SKIP**，等于从没验证过。SKIP 机制会让「路径错」看起来像成功，所以跑测试要**看 `通过 N / 跳過 M` 那一行**。
 - 2026-08-16：**v0.2.1** —— 徽章文字統一。
   - 純量欄的徽章原本是短版「别名」（當初怕在 116px 窄欄換行），但卡片是「參數（別名）」，造成教材編輯那張四列表（純量/string/vector/array）**出現一致、文字卻不一致**。對方量過 `.alias-badge` 為 8px 字級、「參數（別名）」6 個全形字約 56–64px、純量欄內寬約 104px，確實放得下 → 統一為「參數（別名）」。
   - `test/aliasbadge-test.ts` 補上**文字斷言**：四種別名（int& x / string& s / vector<int>& v / int a[]）的徽章文字必須只有一種「參數（別名）」，且分佈為 rail 1 + card 3。用意是防止以後有人為了省空間又改回短版。

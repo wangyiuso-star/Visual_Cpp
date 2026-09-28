@@ -346,6 +346,9 @@ class Parser {
     const line = this.cur().line
     this.next()
     this.expectOp('(')
+    // C++11 范围 for：在标头结束的 ) 之前、或在 ; 之前先遇到 : 就是这种形式。
+    // （:: 在 lexer 里已经是单独 token，不会被误判；字符串/字符字面量也是单独 token。）
+    if (this.isRangeForHeader()) return this.parseRangeFor(line)
     let init: Stmt | undefined
     let cond: Expr | undefined
     let incr: Expr | undefined
@@ -368,6 +371,40 @@ class Parser {
 
     const body = this.parseStatement()
     return { kind: 'for', line, init, cond, incr, body }
+  }
+
+  // 向前扫描标头：遇到 depth 0 的 : 就是范围 for；先遇到 depth 0 的 ; 或 ) 则不是。
+  isRangeForHeader(): boolean {
+    let depth = 0
+    for (let i = 0; i < 500; i++) {
+      const t = this.cur(i)
+      if (t.type === 'eof') return false
+      if (t.type !== 'op') continue
+      const v = t.value
+      if (v === '(' || v === '[' || v === '{') depth++
+      else if (v === ']' || v === '}') depth = Math.max(0, depth - 1)
+      else if (v === ')') {
+        if (depth === 0) return false
+        depth--
+      } else if (v === ';' && depth === 0) return false
+      else if (v === ':' && depth === 0) return true
+    }
+    return false
+  }
+
+  // for (T x : c) / for (auto x : c) / for (auto& x : c)
+  parseRangeFor(line: number): Stmt {
+    while (this.isIdent('const') || this.isIdent('static')) this.next()
+    let declType: Type | null = null
+    if (this.isIdent('auto')) this.next()
+    else declType = this.parseType()
+    const byRef = this.eatOp('&')
+    const name = this.expectIdent().value
+    this.expectOp(':')
+    const iter = this.parseExpr()
+    this.expectOp(')')
+    const body = this.parseStatement()
+    return { kind: 'range_for', line, declType, byRef, name, iter, body }
   }
 
   parseReturn(): Stmt {

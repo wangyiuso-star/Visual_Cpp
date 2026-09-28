@@ -53,6 +53,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] HKOI 教学项目 preset 验证 —— 已做（test/hkoi-presets-test.ts 直接引用对方 presets.ts 的 21 个 preset，执行+渲染+视觉断言 60 项全过）
 - [x] 参数（别名）徽章 —— 已做（VarView.alias + .alias-badge；卡片与纯量栏都标；**刻意不改写入高亮**，test/aliasbadge-test.ts 9 项锁定）
 - [x] 发布 v0.2.0 —— package.json 0.2.0 + git tag v0.2.0（含三项课堂安全修正）
+- [x] range-based for —— 已做（`for (int/auto x : c)` 值拷贝、`for (auto& x : c)` 引用写回；可迭代 array/vector/deque/set/map/string/tree/bst，stack/queue/pqueue 明确报错；ref cell 加 `origin` 以免循环变量被误标「参数（别名）」；test/rangefor-test.ts 30 项）
+- [x] 发布 v0.3.0 —— range-based for
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

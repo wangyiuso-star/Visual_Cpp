@@ -120,5 +120,17 @@ function insideSnap(code: string, marker: string) {
   check('四種別名都有徽章（1 純量欄 + 3 卡片）', rail === 1 && card === 3, 'rail=' + rail + ' card=' + card)
 }
 
+// ---------- 7. range-for 的 auto& 迴圈變數「不是參數」，不該被標徽章 ----------
+{
+  const code = 'void f(vector<int>& v) { for (auto& x : v) x = x * 2; }\nint main(){ vector<int> v; v.push_back(1); f(v); return 0; }\n'
+  let snap: any = null
+  for (const s of run(parse(code), {})) if (s.vars.some((v: any) => v.name === 'x')) snap = s
+  const h = snap ? render(snap) : ''
+  const cs = cards(h)
+  const v = cs.find((c) => c.name === 'v')
+  check('range-for 的 auto& 迴圈變數不算「參數」（純量欄無徽章）', !!h && !scalarHasAliasBadge(h))
+  check('同一帧裡參數 v 仍有徽章', !!v && v.hasAlias, JSON.stringify(cs))
+}
+
 console.log('==== aliasbadge-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)

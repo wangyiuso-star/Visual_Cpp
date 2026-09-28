@@ -556,9 +556,10 @@ function dumpAll(rt: Runtime): VarView[] {
     if (name.indexOf('__sort_') === 0) continue // 排序比较用的临时变量，不展示
     seen.add(name)
     let cell = rt.mem.vars.get(name)!
-    // ref cell 只可能来自「引用参数 / 数组参数」。dump 会解引用（面板显示真实数据），
-    // 但要把「这是别名」这件事记下来，面板才知道该打徽章。
-    const alias = cell.kind === 'ref'
+    // ref cell 只会来自「引用/数组形参」或「range-for 的 auto& 循环变量」。
+    // dump 会解引用（面板显示真实数据），但要把「这是参数别名」记下来给面板打徽章——
+    // 循环变量不是参数，所以只认 origin === 'param'。
+    const alias = cell.kind === 'ref' && cell.origin === 'param'
     if (cell.kind === 'ref') cell = getAtPath(cell.target.mem.vars.get(cell.target.name)!, cell.target.path)
     out.push({ name, cell, scope: 'local', alias })
   }
@@ -719,6 +720,70 @@ function* stableSortWithCmp(
     }
   }
   return arr
+}
+
+// range-for 的容器 → 元素列表 + 元素类型 + 取引用的索引基准 + 能否写回
+interface RangeSeq {
+  elems: Cell[]
+  elemType: Type
+  refBase: number
+  canRef: boolean
+}
+
+function bstInOrder(root: BstNode | null, elemType: Type, out: Cell[]): void {
+  if (!root) return
+  bstInOrder(root.left, elemType, out)
+  out.push({ kind: 'scalar', type: elemType.kind === 'scalar' ? elemType.name : 'int', value: root.value })
+  bstInOrder(root.right, elemType, out)
+}
+
+// 可迭代的容器（照 C++ 的 begin/end 语义）：数组/vector/deque/set/map/string，
+// 另外 tree（本项目自定义，1 基数组）与 bst（中序遍历＝升序）也顺带支持。
+// stack / queue / priority_queue 在 C++ 里没有 begin/end → 明确报错。
+function rangeForSequence(cell: Cell, line: number): RangeSeq {
+  switch (cell.kind) {
+    case 'array':
+    case 'vector':
+      return { elems: cell.cells, elemType: cell.elemType, refBase: 0, canRef: true }
+    case 'deque':
+      return { elems: cell.items, elemType: cell.elemType, refBase: 0, canRef: true }
+    case 'set':
+      // set 的元素是排序去重的键，C++ 里也是 const，不给 auto& 写
+      return { elems: cell.items, elemType: cell.elemType, refBase: 0, canRef: false }
+    case 'tree':
+      // 数组式完全二叉树，1 基下标：nodes[0] 是占位，真实节点是 nodes[1..n]
+      return { elems: cell.nodes.slice(1), elemType: cell.elemType, refBase: 1, canRef: true }
+    case 'bst': {
+      const out: Cell[] = []
+      bstInOrder(cell.root, cell.elemType, out)
+      return { elems: out, elemType: cell.elemType, refBase: 0, canRef: false }
+    }
+    case 'map':
+    case 'umap': {
+      const elemType: Type = { kind: 'pair', first: cell.keyType, second: cell.valueType }
+      const elems: Cell[] = cell.entries.map((e) => ({
+        kind: 'pair',
+        firstType: cell.keyType,
+        secondType: cell.valueType,
+        first: e.key,
+        second: e.value,
+      }))
+      return { elems, elemType, refBase: 0, canRef: false }
+    }
+    case 'scalar':
+      if (cell.type === 'string') {
+        const s = (cell.value ?? '') as string
+        const elems: Cell[] = []
+        for (let i = 0; i < s.length; i++) elems.push({ kind: 'scalar', type: 'char', value: s.charAt(i) })
+        return { elems, elemType: { kind: 'scalar', name: 'char' }, refBase: 0, canRef: false }
+      }
+      throw new RuntimeError('range-for 不支持迭代 ' + cell.type + ' 标量', line)
+    default:
+      throw new RuntimeError(
+        'range-for 不支持迭代 ' + cell.kind + '（stack / queue / priority_queue 在 C++ 里没有 begin/end）',
+        line,
+      )
+  }
 }
 
 function* resolveTarget(rt: Runtime, expr: Expr, forWrite = false): Generator<Snapshot, LValue> {
@@ -1091,7 +1156,7 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
         const desc = lv.cell.kind === 'scalar' ? '标量' : lv.cell.kind
         throw new RuntimeError('数组形参 ' + p.name + ' 需要传入数组（int a[]），实际收到 ' + desc, expr.line)
       }
-      newMem.declare(p.name, { kind: 'ref', target: { mem: lv.mem, name: lv.name, path: lv.path } })
+      newMem.declare(p.name, { kind: 'ref', origin: 'param', target: { mem: lv.mem, name: lv.name, path: lv.path } })
     } else if (p.type.kind === 'scalar') {
       const rv = d && 'rv' in d ? (d as { rv: RV }).rv : ({ type: 'int', v: 0 } as RV)
       newMem.declare(p.name, scalarCell(p.type, rv, expr.line))
@@ -1683,6 +1748,49 @@ function* execStmt(rt: Runtime, s: Stmt): Generator<Snapshot> {
         if (rt.showCond.while) yield* markCondition(rt, s.condLine, s.cond, result, 'while')
         else rt.mem.clearAccess()
         if (!result) break
+      }
+      break
+    }
+
+    case 'range_for': {
+      const it = s.iter
+      // 容器必须是可定位的变量（或它的下标/成员，例如 g[u]）
+      if (it.kind !== 'ident' && it.kind !== 'index' && it.kind !== 'member') {
+        throw new RuntimeError('range-for 的容器必须是变量或其下标/成员（例如 v 或 g[u]）', s.line)
+      }
+      const lv = yield* resolveTarget(rt, it)
+      const seq = rangeForSequence(lv.cell, s.line)
+      if (s.byRef && !seq.canRef) {
+        throw new RuntimeError('这个容器的元素不能用 auto& 修改（请用 auto / 显式类型做值拷贝）', s.line)
+      }
+      // 范围在进入循环时固定下来（与 C++ 一致：end 只取一次）
+      const total = seq.elems.length
+      for (let i = 0; i < total; i++) {
+        const el = seq.elems[i]
+        let declCell: Cell
+        if (s.byRef) {
+          // auto& / T& ：绑定成「指向该元素的 ref cell」，写入会回到原容器
+          declCell = {
+            kind: 'ref',
+            origin: 'loop',
+            target: { mem: lv.mem, name: lv.name, path: lv.path.concat(i + seq.refBase) },
+          }
+        } else if (s.declType && s.declType.kind === 'scalar' && el.kind === 'scalar') {
+          // for (int x : ...) / for (char c : s) 等显式类型：按声明类型转一次
+          declCell = scalarCell(s.declType, { type: el.type, v: el.value ?? defaultScalar(el.type) }, s.line)
+        } else {
+          // auto（或非标量元素）：直接用元素 cell；cell 不可变，所以这就是值拷贝语义
+          declCell = el
+        }
+        rt.mem.declare(s.name, declCell)
+        yield* mark(rt, s.line)
+        try {
+          yield* execStmt(rt, s.body)
+        } catch (e) {
+          if (e instanceof ContinueSignal) continue
+          if (e instanceof BreakSignal) break
+          throw e
+        }
       }
       break
     }

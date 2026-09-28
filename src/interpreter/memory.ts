@@ -24,7 +24,9 @@ export type Cell =
   | { kind: 'pair'; firstType: Type; secondType: Type; first: Cell; second: Cell }
   | { kind: 'deque'; elemType: Type; items: Cell[] }
   | { kind: 'struct'; structName: string; members: { name: string; cell: Cell }[] }
-  | { kind: 'ref'; target: { mem: Memory; name: string; path: number[] } }
+  // origin：这个 ref 是谁产生的——参数（引用/数组形参）还是 range-for 的循环变量。
+  // 「参数（别名）」徽章只认 param，不然循环变量会被误标成参数。
+  | { kind: 'ref'; origin?: 'param' | 'loop'; target: { mem: Memory; name: string; path: number[] } }
 
 export interface CellRef {
   name: string
