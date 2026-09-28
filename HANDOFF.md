@@ -1,6 +1,13 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-16：**v0.5.2 —— 修「cin 输入不足」的偶发 bug（根因是快照失效漏了 cin 输入）+ 错误讯息讲清楚差几个值**。
+  - **使用者回报**：偶发出现「cin 输入不足」，**刷新一下就没了**。→ 这种「非决定性 + 刷新即好」通常是状态 bug，不是程式的 token 数问题。
+  - **根因**：`collect()` 依赖 `code` / `showIf,showWhile,showFor` / `boolAsInt` / **`input`**；但只有前三个变更时才会 `setSnapshots(null)`，cin 输入框的 `onChange` 只做了 `setInput`。于是「**先按运行（输入框还空着）→ 快照里烙着错误 → 才填输入框 → 快照没失效 → 之后按单步/播放/←→ 都只是重播那个旧错误**」；刷新把 snapshots 清掉才会好。完全对应「偶发 + 刷新即好」。
+  - **修法**：新增 `onInputChange`，改 cin 输入就跟改代码一样让快照失效（`setPlaying(false)` / `setSnapshots(null)` / `setIndex(-1)` / `setError(null)`）。
+  - **讯息改善**：`cin 输入不足（读到输入末尾）` → 「`cin 输入不足：程式要读第 N 个值，但「cin 输入」框只提供了 M 个（用空白分隔）`」。
+  - 新增 `test/cin-test.ts`（14 项：链式读入、多行、无空白→整串进 string、用 string 读运算子的变通、输入不足的三种情况、`cin >> char` 与 cin 目标的已知限制）。测试档 28 个。
+  - 注：App 这一层的行为**没有自动化测试**（需要 DOM 互动），已用 build + 代码检视确认；手动验证法见下。
 - 2026-08-16：**v0.5.1 —— 收紧字元参数 + substr 越界报错**（延续「不要静默、不要教出编译不过的写法」）。
   - `append / insert / replace / compare` 现在**只接受字串参数**：C++ 里这四个方法没有接受单一字元的重载，以前工具会用 char 跑（`s.append('!')`），学生学到的是**真实 C++ 编译不过**的写法。现在明确报错并提示改用 `push_back` / `+=`。
   - 保留宽松（因为 C++ 合法）：`find / rfind`（有 `find(CharT)` 重载）、`push_back`（`push_back(CharT)`）、`+=`（`operator+=(CharT)`）。

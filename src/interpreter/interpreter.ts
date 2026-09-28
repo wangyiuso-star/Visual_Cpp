@@ -1968,7 +1968,17 @@ function* execStmt(rt: Runtime, s: Stmt): Generator<Snapshot> {
     case 'cin':
       for (const target of s.targets) {
         const raw = rt.input[rt.inputPos]
-        if (raw === undefined) throw new RuntimeError('cin 输入不足（读到输入末尾）', s.line)
+        if (raw === undefined) {
+          // 讲清楚「差多少」：不然使用者只能在程式里慢慢找是哪一个 cin 读不完
+          throw new RuntimeError(
+            'cin 输入不足：程式要读第 ' +
+              (rt.inputPos + 1) +
+              ' 个值，但「cin 输入」框只提供了 ' +
+              rt.input.length +
+              ' 个（用空白分隔）',
+            s.line,
+          )
+        }
         rt.inputPos++
         const rv = parseInputValue(raw)
         const lv = yield* resolveTarget(rt, target, true)

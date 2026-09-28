@@ -126,6 +126,18 @@ export default function App() {
     setError(null)
   }
 
+  // cin 输入也是 collect() 的输入之一，所以改了它同样要让快照失效。
+  // 以前这里只 setInput、没清快照 → 「先运行（输入框还空着）→ 再填输入」会一直重播
+  // 旧的「cin 输入不足」快照，按单步/播放都还是那个错误，看起来像「偶发的 bug」，
+  // 刷新（清空 snapshots）才会好 —— 这正是使用者遇到的现象。
+  function onInputChange(v: string) {
+    setInput(v)
+    setPlaying(false)
+    setSnapshots(null)
+    setIndex(-1)
+    setError(null)
+  }
+
   function changeShow(kind: 'if' | 'while' | 'for', val: boolean) {
     if (kind === 'if') setShowIf(val)
     else if (kind === 'while') setShowWhile(val)
@@ -403,7 +415,7 @@ export default function App() {
               <textarea
                 className="cin-textarea"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => onInputChange(e.target.value)}
                 placeholder="预填 cin 输入，支持空格/换行分隔"
               />
             </div>
