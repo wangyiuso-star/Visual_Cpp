@@ -265,7 +265,7 @@ body {
 }
 .shape-square { grid-column: span 1; }
 .shape-horizontal { grid-column: 1 / -1; }
-.reorder-btns { margin-left: 8px; display: inline-flex; gap: 2px; }
+.reorder-btns, .card-controls { margin-left: 8px; display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
 .reorder-btn { cursor: pointer; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; font-size: 11px; line-height: 1.1; padding: 2px 5px; }
 .reorder-btn:hover { color: var(--accent); border-color: var(--accent); }
 .viz-scalars {
@@ -639,3 +639,24 @@ body {
 .tree-graph .tree-node { font-size: 1em; padding: .46em .69em; }
 .tree-graph .tree-root-label { font-size: .7em; margin-bottom: .2em; }
 
+/* ---- 卡片：拖动排序 + 单卡缩放 + 整行宽（v0.9.0）----
+   zoom 用 CSS 的 zoom 属性（不是 transform）：它会连 .cell 里写死的 13px 字号与内边距一起缩放，
+   而且参与布局，不会像 transform 那样留下一块空白。Chrome / Edge / Safari 都支援，Firefox 126+ 也有。 */
+.var, .calltree-section { zoom: var(--card-zoom, 1); width: calc(100% / var(--card-zoom, 1)); }
+.var.card-wide, .calltree-section.card-wide { grid-column: 1 / -1; }
+/* 拖动时的落点提示：虚线框（拖到谁身上就占谁的位置） */
+.var.card-drop, .calltree-section.card-drop { outline: 2px dashed var(--accent); outline-offset: 3px; border-radius: 6px; }
+.var.card-dragging, .calltree-section.card-dragging { opacity: .45; }
+.card-drag {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  user-select: none;
+}
+.card-drag:hover { border-color: var(--border); color: var(--text); }
+.card-drag:active { cursor: grabbing; }
+.zoom-pct { font-variant-numeric: tabular-nums; min-width: 40px; }

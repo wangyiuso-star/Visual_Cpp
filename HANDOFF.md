@@ -1,6 +1,15 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**v0.9.0 —— 右側卡片「畫布化」：拖動排序 + 單卡縮放 + 整行寬（+ 持久化）**。這是待辦清單上最後一項（`[ ] 右侧卡片自由拖拽 + 缩放`）。
+  - **拖動排序**：卡片標題列左邊加一個拖动把手（⠿，`draggable`），拖到哪張卡片上就佔那張的位置（`moveKeyTo`），落點有虛線框提示、被拖的卡片半透明。原有的 ↑/↓ 按鈕保留（精確、方便鍵盤）。
+  - **單卡縮放**：每張卡片有自己的 `−  100%  ＋`（70%~160%，步進 10%，點百分比還原 100%）。實作用 **CSS 的 `zoom` 屬性**而不是 `transform`：`zoom` 會連 `.cell` 裡寫死的 13px 字號與內距一起縮放，而且**參與佈局**（`transform` 會留下一塊空白）；另外補了 `width: calc(100% / var(--card-zoom))`，放大後才不會溢出格子。
+  - **整行寬**：`⤢/⤡` 在「半寬」與「跨整行」之間切換（`grid-column: 1 / -1`）——筆電上把二維陣列/圖那張拉成整行很實用。
+  - **持久化**：順序 / 縮放 / 全寬存在 `localStorage['cpp-viz.panel-layout']`（老師排一次就固定下來）。讀檔一律驗型別，壞掉就當空佈局（不能讓一份舊存檔把面板弄壞）。
+  - **可測性**：拖動與 localStorage 在 node 端測不到（要真瀏覽器的 DOM 事件），所以把「順序怎麼算、縮放怎麼夾、存檔怎麼讀」抽成純函式 `src/components/panelLayout.ts`，新增 `test/panellayout-test.ts`（**24 項**：拖到誰身上、相鄰互換、邊界、夾取、壞存檔、round-trip）。`test/render-test.ts` 補 4 項 DOM 斷言（拖动把手 / 縮放控件 / `--card-zoom` / 按鈕數）。
+  - ⚠️ **教訓（編碼）**：用 PowerShell 的 `Add-Content` 追加 CSS 時，中文註解被 ANSI 碼頁寫成 `?`（`/* ---- ??:???? ...`）。**寫檔案一律走 `tools.write` / `tools.edit`（UTF-8），不要用 PowerShell 的文字管線寫含非 ASCII 的檔案**；已用 node 腳本以 UTF-8 重寫該段。
+  - 🔎 **跨專案測試修正**：HKOI 的 preset 已經從 21 個長到 **32 個**（多了 v0.7.0 的「讀到 EOF（while cin）」「getline 與 cin.ignore」「字元算術」「固定小數位數」「sort 降序」等）。`test/hkoi-presets-test.ts` 以前一律用**空輸入**跑 → 那些要讀 cin 的 preset 會撞上「cin 讀不足」的明確錯誤（正確行為，但測試要餵資料）。已加 `PRESET_INPUTS`（照他們註解給：EOF → `1 2 3`；getline 陷阱 → 第一行 `3`、第二行 `hello world`），**84 項全過**。
+  - 測試檔 **32 個**（新增 `panellayout-test`），全過、0 跳過。
 - 2026-08-17：**v0.8.0 —— HKOI 缺口提案的第二優先（他列為「有替代、不急」的那批，一次補齊）**。
   - **`#define`（物件式巨集）**：本工具沒有前置處理器，所以在 `tokenize` 之前加一趟文字層展開 `expandDefines(src)`。第一趟把所有井號開頭的行拿掉（`#include` 本來就被忽略），遇到 `#define NAME 內容` 就記下來；**用等長空白取代，行號/欄號不變**（錯誤訊息位置才對得上）。第二趟掃識別字換掉（跳過字串/字元常數與註解，最多 5 趟支援巨集套巨集）。`#define f(x) …`（名稱後緊接 `(`）＝函式式巨集，忽略。
   - **`typedef` / `using 別名`**：以前只是 `skipToSemi()` 跳過（所以 `typedef long long ll;` 不會報錯，但 `ll x;` 會壞）。現在 Parser 有 `typeAliases: Map<string, Type>`，`parseProgram` 真的解析 `typedef T NAME;` 與 `using NAME = T;`（`using namespace std;` 仍然跳過），`isTypeStart` / `parseType` 都查別名 → `ll x`、`vector<ll>` 都能用。`size_t` 當 `int`（`parseScalarTypeName` + `isTypeStart`）。

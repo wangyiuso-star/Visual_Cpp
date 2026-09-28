@@ -38,7 +38,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] set / map / unordered_map —— 已做（set 排序去重；map/umap 支持 operator[] 键索引 + erase/find/count/size/empty/clear；渲染 set 列表 + map 键值对；test/setmap-test.ts 7 项通过）
 - [x] 图可视化 —— 已做（邻接表 vector<int> g[N] / vector<vector<int>> 识别为图，SVG 节点+连线，节点/边读写高亮，图/表切换；带权图 pair<int,int> 边权重显示；有向图自动画箭头；右侧容器两列并排；新增「图的 DFS」「带权图（有向）」预设）
 - [x] pair / make_pair —— 已做（pair<A,B> 类型、make_pair(a,b)、.first/.second 成员读写；test/pair-test.ts + dijkstra-test.ts 通过）
-- [ ] 右侧卡片自由拖拽 + 缩放（画布化：拖动摆放位置、缩放大小）
+- [x] 右侧卡片自由拖拽 + 缩放 —— 已做（**拖动排序**（拖到谁身上占谁的位置，虚线落点提示 + 拖动把手⠿）、**单卡缩放** 70%~160%（CSS `zoom` 属性 + `width: calc(100% / var(--card-zoom))` 宽度补偿，才能连 `.cell` 写死的字号一起缩放又不溢出）、**整行宽切换**（⤢/⤡）、**顺序/缩放/全宽持久化**在 `localStorage['cpp-viz.panel-layout']`；纯函数抽到 `src/components/panelLayout.ts` → test/panellayout-test.ts 24 项 + render-test 4 项 DOM 断言）
 - [x] struct + 容器参数 + 引用传递 + 结构体返回值 —— 已做（struct 定义/成员读写/初始化、int& 引用传递、容器按值参数、struct 参数/返回值；另支持 array/tree/vector 存 struct（含初始化）；test/struct-test.ts 5 项 + struct-return-test.ts 2 项 + struct-container-test.ts 4 项通过）
 - [x] 多维 vector 完善 —— 已做（vector<vector<int>> g(n, vector<int>(m)) 矩阵填充 + 结构共享隔离；int a[] = {...} 数组大小推断；test/multivec-test.ts 4 项通过）
 - [x] 常用 STL —— 已做（deque 容器 + sort/reverse/lower_bound/swap 函数；test/stl-test.ts 6 项通过）
@@ -73,6 +73,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.7.0 —— HKOI 缺口提案第一优先
 - [x] HKOI 缺口提案第二优先 —— 已做（`#define`（物件式巨集，文字層展開，等長空白保留行號）、`typedef` / `using` 型別別名、`size_t`、三目 `?:`、`sizeof`（動態容器刻意不支援並給教學說明）、`memset`（逐位元組語意）、`fill` / `v.assign` / `min({...})` / `INT_MAX` / `cin.get()`、區間寫法 `sort(v.begin(),v.end())` / `sort(a,a+n)` / `lower_bound(a,a+n,x)`；**踩坑：內建 `fill` 搶走使用者自訂函式名 → 加 `shadowed` 守衛，使用者函式優先**；test/gap-test.ts 127 項）
 - [x] 发布 v0.8.0 —— HKOI 缺口提案第二优先
+- [x] 发布 v0.9.0 —— 右侧卡片拖动排序 + 单卡缩放 + 整行宽 + 持久化
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

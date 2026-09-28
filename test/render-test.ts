@@ -193,6 +193,31 @@ for (const p of PRESETS) {
   }
 }
 
+// ---------- 卡片控制项：拖动把手 / 单卡缩放 / 整行宽（v0.9.0）----------
+// 拖动本身要真浏览器（DOM 事件）才测得到，这里只从 DOM 层确认控件都画出来了、
+// 而且每张卡片都带了自己的 --card-zoom（缩放变量）。
+{
+  const src = [
+    '#include <bits/stdc++.h>',
+    'using namespace std;',
+    'int sum(int n){ int s = 0; for(int i = 1; i <= n; i++) s += i; return s; }',
+    'int main(){ int a[3] = {1,2,3}; cout << sum(a[0]); return 0; }',
+    '',
+  ].join('\n')
+  let last: any = null
+  try {
+    for (const s of run(parse(src), {})) last = s
+  } catch (e) { check('卡片控制项：程式可执行', false, (e as Error).message) }
+  if (last && last.error) check('卡片控制项：程式可执行', false, last.error)
+  let h = ''
+  try {
+    h = renderToStaticMarkup(createElement(VariablesPanel, { snapshot: last }))
+  } catch (e) { check('卡片控制项：可渲染', false, (e as Error).message) }
+  check('卡片有拖动把手', h.indexOf('card-drag') >= 0)
+  check('卡片有缩放控件', h.indexOf('card-controls') >= 0 && h.indexOf('zoom-pct') >= 0)
+  check('卡片带 --card-zoom 缩放变数', h.indexOf('--card-zoom') >= 0)
+  check('卡片有上下移与整行宽按钮', h.indexOf('border-radius:4px;font-size:11px;padding:2px 5px') >= 0 || (h.match(/reorder-btn/g) || []).length >= 3)
+}
 console.log('-'.repeat(88))
 console.log('==== render-test: ' + pass + ' 通过, ' + fail + ' 失败 ====')
 if (fail > 0) process.exit(1)

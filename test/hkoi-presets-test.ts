@@ -34,6 +34,20 @@ function varNames(html: string): string[] {
 console.log('preset'.padEnd(24) + ' 步數  最大格子  同屏變數（最後一帧）')
 console.log('-'.repeat(96))
 
+// 有幾個 preset 需要 cin 輸入（HKOI 那邊把範例輸入寫在註解裡，preset 本身沒有 input 欄位）。
+// 照他們的註解給：讀到 EOF → 一串數字；getline 陷阱 → 第一行 3、第二行 hello world。
+const PRESET_INPUTS: Record<string, string> = {
+  '讀到 EOF（while cin）': '1 2 3',
+  'getline 與 cin.ignore': '3' + String.fromCharCode(10) + 'hello world',
+}
+function presetInput(name: string, code: string): string {
+  const fixed = PRESET_INPUTS[name]
+  if (fixed !== undefined) return fixed
+  // 其他 preset 若之後也用了 cin，先給一組安全的數字輸入
+  // （cin 語句形式讀不足會明確報錯，這正是我們要的——所以一定要餵資料）
+  return /\bcin\b/.test(code) ? '1 2 3 4 5' : ''
+}
+
 type Info = { steps: number; snaps: any[]; htmls: string[]; maxCells: number; allHtml: string }
 
 const info: Record<string, Info> = {}
@@ -41,7 +55,7 @@ const info: Record<string, Info> = {}
 for (const p of PRESETS) {
   let snaps: any[] = []
   try {
-    snaps = [...run(parse(p.code), {})]
+    snaps = [...run(parse(p.code), { input: presetInput(p.name, p.code) })]
   } catch (e) {
     check(p.name + ' 可執行', false, '解析拋錯: ' + (e as Error).message)
     continue

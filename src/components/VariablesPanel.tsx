@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { DragEvent, ReactNode } from 'react'
+import {
+  LAYOUT_STORAGE_KEY,
+  ZOOM_STEP,
+  clampZoom,
+  loadLayout,
+  moveKeyBy,
+  moveKeyTo,
+  serializeLayout,
+  zoomOf,
+} from './panelLayout'
+import type { CardLayout } from './panelLayout'
 import { createPortal } from 'react-dom'
 import type { Snapshot, CallNode } from '../interpreter/interpreter'
 import type { VarView, Cell, ScalarValue, BstNode } from '../interpreter/memory'
@@ -194,7 +205,19 @@ interface Props {
 export default function VariablesPanel({ snapshot }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [treeCollapsed, setTreeCollapsed] = useState(false)
-  const [order, setOrder] = useState<string[]>([])
+  // 卡片布局（顺序 / 单卡缩放 / 全宽）持久化在 localStorage：老师排一次就固定下来。
+  const [layout, setLayout] = useState<CardLayout>(() =>
+    loadLayout(typeof localStorage === 'undefined' ? null : localStorage.getItem(LAYOUT_STORAGE_KEY)),
+  )
+  const [dragKey, setDragKey] = useState<string | null>(null)
+  const [overKey, setOverKey] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, serializeLayout(layout))
+    } catch {
+      // 无痕模式 / 空间满：存不了也没关系，不要影响上课
+    }
+  }, [layout])
 
   function toggleCollapse(name: string) {
     setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }))
@@ -238,20 +261,43 @@ export default function VariablesPanel({ snapshot }: Props) {
     const pb = b.kind === 'calltree' ? 1 : kindPriority(b.v.cell)
     return pa - pb
   })
-  const items = arrange(defaultItems, order, itemKey)
+  const items = arrange(defaultItems, layout.order, itemKey)
 
   function moveItem(key: string, dir: -1 | 1) {
-    setOrder((prev) => {
-      const keys = items.map(itemKey)
-      const i = keys.indexOf(key)
-      const j = i + dir
-      if (i < 0 || j < 0 || j >= keys.length) return prev
-      const next = keys.slice()
-      const t = next[i]
-      next[i] = next[j]
-      next[j] = t
-      return next
-    })
+    setLayout((prev) => ({ ...prev, order: moveKeyBy(items.map(itemKey), key, dir) }))
+  }
+
+  function reorderTo(key: string, target: string) {
+    setLayout((prev) => ({ ...prev, order: moveKeyTo(items.map(itemKey), key, target) }))
+  }
+
+  // 每张卡片的拖动 / 缩放状态与操作打包成一个对象，两种卡片（容器卡、调用树卡）共用。
+  function cardView(key: string): CardView {
+    return {
+      zoom: zoomOf(layout, key),
+      wide: !!layout.wide[key],
+      dragging: dragKey === key,
+      over: !!dragKey && dragKey !== key && overKey === key,
+      onZoom: (steps) =>
+        setLayout((prev) => ({ ...prev, zoom: { ...prev.zoom, [key]: clampZoom(zoomOf(prev, key) + steps * ZOOM_STEP) } })),
+      onResetZoom: () => setLayout((prev) => ({ ...prev, zoom: { ...prev.zoom, [key]: 1 } })),
+      onToggleWide: () => setLayout((prev) => ({ ...prev, wide: { ...prev.wide, [key]: !prev.wide[key] } })),
+      onDragStart: () => {
+        setDragKey(key)
+        setOverKey(null)
+      },
+      onDragEnd: () => {
+        setDragKey(null)
+        setOverKey(null)
+      },
+      onDragOverCard: () => setOverKey(key),
+      onDragLeaveCard: () => setOverKey((k) => (k === key ? null : k)),
+      onDropCard: () => {
+        if (dragKey) reorderTo(dragKey, key)
+        setDragKey(null)
+        setOverKey(null)
+      },
+    }
   }
 
   return (
@@ -282,14 +328,15 @@ export default function VariablesPanel({ snapshot }: Props) {
             {items.map((item) => {
               if (item.kind === 'calltree') {
                 return (
-                  <div className="calltree-section shape-horizontal" key="calltree">
+                  <div
+                    className={cardClass('calltree-section shape-horizontal', cardView('@calltree'))}
+                    key="calltree"
+                    {...cardDragProps(cardView('@calltree'))}
+                  >
                     <div className="calltree-title" onClick={() => setTreeCollapsed((t) => !t)}>
                       <span className="caret">{treeCollapsed ? '▸' : '▾'}</span>
                       递归树 / 调用树
-                      <span className="reorder-btns">
-                        <button className="reorder-btn" title="上移" onClick={(e) => { e.stopPropagation(); moveItem('@calltree', -1) }}>↑</button>
-                        <button className="reorder-btn" title="下移" onClick={(e) => { e.stopPropagation(); moveItem('@calltree', 1) }}>↓</button>
-                      </span>
+                      <CardControls card={cardView('@calltree')} onMove={(dir) => moveItem('@calltree', dir)} />
                     </div>
                     {!treeCollapsed && <CallTreeGraph root={snapshot.callTree!} activeCallId={snapshot.activeCallId ?? 0} />}
                   </div>
@@ -308,6 +355,7 @@ export default function VariablesPanel({ snapshot }: Props) {
                   vars={snapshot.vars}
                   shape={shapeClass(item.v.cell)}
                   onMove={(dir) => moveItem(item.v.name, dir)}
+                  card={cardView(item.v.name)}
                 />
               )
             })}
@@ -325,6 +373,86 @@ export default function VariablesPanel({ snapshot }: Props) {
         </div>
       )}
     </div>
+  )
+}
+
+// 一张卡片的拖动 / 缩放状态与操作（两种卡片共用）
+interface CardView {
+  zoom: number
+  wide: boolean
+  dragging: boolean
+  over: boolean
+  onZoom: (steps: number) => void
+  onResetZoom: () => void
+  onToggleWide: () => void
+  onDragStart: () => void
+  onDragEnd: () => void
+  onDragOverCard: () => void
+  onDragLeaveCard: () => void
+  onDropCard: () => void
+}
+
+function cardClass(base: string, card: CardView): string {
+  return (
+    base +
+    (card.wide ? ' card-wide' : '') +
+    (card.dragging ? ' card-dragging' : '') +
+    (card.over ? ' card-drop' : '')
+  )
+}
+
+// 卡片外层要挂的拖动事件 + 缩放变量（zoom 用 CSS 的 zoom 属性，才会连格子内距一起缩放）
+function cardDragProps(card: CardView) {
+  return {
+    style: { '--card-zoom': String(card.zoom) } as React.CSSProperties,
+    onDragOver: (e: DragEvent) => {
+      if (card.dragging) return
+      e.preventDefault()
+      card.onDragOverCard()
+    },
+    onDragLeave: () => card.onDragLeaveCard(),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      card.onDropCard()
+    },
+  }
+}
+
+// 卡片右上角：拖动把手 / 上下移 / 缩放 − % ＋ / 整行宽
+function CardControls({ card, onMove }: { card: CardView; onMove?: (dir: -1 | 1) => void }) {
+  const pct = Math.round(card.zoom * 100)
+  return (
+    <span className="card-controls" onClick={(e) => e.stopPropagation()}>
+      <span
+        className="card-drag"
+        draggable
+        title="按住拖动这张卡片，放到别的卡片上就换位置"
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', 'card')
+          card.onDragStart()
+        }}
+        onDragEnd={card.onDragEnd}
+      >
+        ⠿
+      </span>
+      {onMove && (
+        <>
+          <button className="reorder-btn" title="上移" onClick={() => onMove(-1)}>↑</button>
+          <button className="reorder-btn" title="下移" onClick={() => onMove(1)}>↓</button>
+        </>
+      )}
+      <button className="reorder-btn" title="缩小这张卡片" onClick={() => card.onZoom(-1)}>−</button>
+      <button className="reorder-btn zoom-pct" title="点一下还原成 100%" onClick={card.onResetZoom}>{pct}%</button>
+      <button className="reorder-btn" title="放大这张卡片" onClick={() => card.onZoom(1)}>＋</button>
+      <button
+        className="reorder-btn"
+        title={card.wide ? '改成半宽' : '改成整行宽'}
+        onClick={card.onToggleWide}
+      >
+        {card.wide ? '⤡' : '⤢'}
+      </button>
+    </span>
   )
 }
 
@@ -368,6 +496,7 @@ function VarItem({
   vars,
   shape,
   onMove,
+  card,
 }: {
   v: VarView
   reads: Set<string>
@@ -379,9 +508,10 @@ function VarItem({
   vars: VarView[]
   shape: string
   onMove: (dir: -1 | 1) => void
+  card: CardView
 }) {
   return (
-    <div className={'var ' + shape}>
+    <div className={cardClass('var ' + shape, card)} {...cardDragProps(card)}>
       <div className="var-name" onClick={onToggle}>
         <span className="caret">{collapsed ? '▸' : '▾'}</span>
         {v.name}
@@ -392,10 +522,7 @@ function VarItem({
           </span>
         )}
         <span className="var-type">{cellLabel(v.cell)}</span>
-        <span className="reorder-btns">
-          <button className="reorder-btn" title="上移" onClick={(e) => { e.stopPropagation(); onMove(-1) }}>↑</button>
-          <button className="reorder-btn" title="下移" onClick={(e) => { e.stopPropagation(); onMove(1) }}>↓</button>
-        </span>
+        <CardControls card={card} onMove={onMove} />
       </div>
       {!collapsed && <CellNode name={v.name} path={[]} cell={v.cell} reads={reads} writes={writes} judges={judges} focus={focus} vars={vars} />}
     </div>
