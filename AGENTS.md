@@ -67,6 +67,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.5.2 —— cin 输入失效修正 + 讯息改善
 - [x] 容器当值传递 —— 已做（**修三个缺口**：evalExpr 拒绝容器识别字/下标 → 回传带 cell 的容器值；execDecl 静默忽略容器初始化式 → 要求回传同类容器；map 的值是容器不支援 → allocFromType + operator[] 会插入。另加 `assertScalarRV` 守衛避免放宽后静默变 0；临时值下标 `f()[0]` 与临时成员 `mk().x`；test/container-test.ts 28 项含使用者原题）
 - [x] 发布 v0.6.0 —— 容器可以当值传递（回传 / 赋值 / 按值传参）
+- [x] 容器当值不再显示「?」+ 修 `vector<int>()` 崩溃 + 不支援组合给明确错误 —— 已做（渲染层 15 处「不是标量就给 `?`」的退路改成递归摘要 `formatCellShort`；空 vector 构造式；`g.push_back({1,2})`；`set<容器>`/`sort(容器)` 给明确错误；test/summary-test.ts 23 项 + container 36 项 + render 4 项）
+- [x] 发布 v0.6.1 —— 容器当值摘要修正
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

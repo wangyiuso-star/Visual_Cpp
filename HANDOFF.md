@@ -1,6 +1,16 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**v0.6.1 —— 容器当值时右边不再显示「?」+ 修 `vector<int>()` 崩溃 + 不支援的组合给明确错误**。
+  - **使用者回报**：`map` 的值是 `vector` 时，画面上那一格显示 `?`（并猜是「写 set 的时候把 value 绑死成一个值」）。
+  - **根因不在 set，而在渲染层**：`VariablesPanel.tsx` 有 **15 处**「不是标量就给 `?`」的退路（map 的键/值、struct 成员、pair 的成员、stack/queue/deque 的元素、数组窗口的格子……），而且 `formatCellShort` 本身也只认 scalar/pair/struct。v0.6.0 让容器能「当值」放进这些位置之后，这些退路就全被踩到了。
+  - **修法**：`formatCellShort` 改成**递归摘要** —— 容器 `[1, 2, …]`、set `{…}`、map `{k: v, …}`、pair `(a, b)`、struct `{x:1, …}`、tree 层级序 / BST 中序、ref → `&名字`；带**深度上限 3** 与**长度上限 8**（超出显示 `…`），**永不回传光秃秃的 `?`**。15 处退路全部改呼叫它。
+  - **顺带修掉一个真崩溃**：`vector<int>()`（合法的空 vector，常写成 `g.push_back(vector<int>())`、`v = vector<int>()`）以前拿 `undefined` 去求值，崩成 `Cannot read properties of undefined (reading 'kind')`。现在回传空 vector。
+  - **顺带**：`g.push_back({1, 2})`（元素是 vector 时，`{…}` 就是内层 vector 的初始化列表，合法 C++）原本报「初始化列表只支持 struct 元素」，现在支援（可嵌套）。
+  - **不再外泄内部讯息**：`run()` 的兜底分支把非 RuntimeError 的错误标成「内部错误（这是本工具的 bug，请把这段程序反馈给我们）」；`set<容器>` / `sort(vector<容器>)` / `lower_bound(vector<容器>)` 改为明确的「只支持标量 / 只能放进标量元素」（以前是 `cellScalar: 非标量` 这种看不懂的讯息）。
+  - 新增 `test/summary-test.ts`（23 项：每种容器当值的摘要、深度/长度上限、ref、空容器，以及**所有 preset 的每一格容器都不能被画成 `?`** 的地毯式检查）；`test/container-test.ts` 28 → **36 项**；`test/render-test.ts` 增 4 项 DOM 断言（就是以前写死 `': ?'` 的那几个位置）。测试档共 **30 个**。
+  - 注：`?` 仍有一个**合法**用途 —— 未初始化的纯量（`int a[10];` 的格子、`vector<int> v(3)` 的元素）本来就显示 `?`（`formatScalar` 的约定）。那与这个 bug 是两回事，测试刻意只抓「非纯量 cell 被画成 `?`」。
+  - 工具链注记：`npm run build` 只跑 `vite build`（rolldown 只剥型别、**不做型别检查**），所以 TS 型别错误**不会挡住建置**；`tsc --noEmit` 目前有 **149 个既有错误**（改动前后同一个数）。以后改完可以跑一次确认「没有新增错误」，但不要以为 149 是这次弄坏的。
 - 2026-08-16：**v0.6.0 —— 容器可以当值传递**（修掉三个缺口，使用者回报的「回传容器的递归跑不了」就是它們造成的）。
   - **缺口 A（核心）**：`evalExpr` 的 `ident` / `index` 分支以前直接拒绝容器（`变量 "res" 是容器，不能作为标量使用`）→ 现在回传「带 cell 的容器值」。于是 `m[k]=v`、函数回传容器、容器按值传参、`g[u]` 都能用。**这正是使用者 `return memo[expression]=res;` 的报错来源**（`execAssign` 本来就支援容器赋值，是 evalExpr 先挡掉的）。
   - **必要守衛**：新增 `assertScalarRV`，在 `num` / `cmp` / `coerceTo` / `execAssign` / `cout` / `+=` 字串分支都拦下容器——**不放宽就会从「明确报错」退化成「静默 0」**（`int x = v`、`string s = v`、`a[0]=v`、`s+=v` 实测都明确报错）。

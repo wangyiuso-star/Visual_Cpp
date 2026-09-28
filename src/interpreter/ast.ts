@@ -96,5 +96,5 @@ export type Expr =
   | { kind: 'call'; line: number; name: string; args: Expr[] }
   | { kind: 'method_call'; line: number; object: Expr; method: string; args: Expr[] }
   | { kind: 'member'; line: number; object: Expr; field: string }
-  | { kind: 'container_ctor'; line: number; type: Type; size: Expr; fill?: Expr }
+  | { kind: 'container_ctor'; line: number; type: Type; size?: Expr; fill?: Expr }
   | { kind: 'init_list'; line: number; items: Expr[] }

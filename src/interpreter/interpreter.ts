@@ -400,6 +400,13 @@ function* buildStructFromList(rt: Runtime, elemType: Type, items: Expr[], line: 
 
 function* buildElemCell(rt: Runtime, elemType: Type, argExpr: Expr, line: number): Generator<Snapshot, Cell> {
   if (argExpr.kind === 'init_list') {
+    // 元素本身是 vector 时（vector<vector<int>> g; g.push_back({1, 2});），
+    // {…} 就是那个内层 vector 的初始化列表 —— 合法 C++，之前会报「只支持 struct 元素」。
+    if (elemType.kind === 'vector') {
+      const cells: Cell[] = []
+      for (const it of argExpr.items) cells.push(yield* buildElemCell(rt, elemType.elem, it, line))
+      return { kind: 'vector', elemType: elemType.elem, cells }
+    }
     return yield* buildStructFromList(rt, elemType, argExpr.items, line)
   }
   if (argExpr.kind === 'ident' || argExpr.kind === 'index' || argExpr.kind === 'member') {
@@ -422,6 +429,15 @@ function cellToRV(cell: Cell, line: number): RV {
 
 function cellScalar(cell: Cell): ScalarValue {
   if (cell.kind !== 'scalar') throw new Error('cellScalar: 非标量')
+  return cell.value === null ? defaultScalar(cell.type) : cell.value
+}
+
+// 排序 / 二分这类「按大小比较」的内建只认标量元素。这里给一句人看得懂的错误，
+// 而不是让 cellScalar 抛出「cellScalar: 非标量」这种看不懂的内部讯息。
+function cellScalarElem(cell: Cell, line: number): ScalarValue {
+  if (cell.kind !== 'scalar') {
+    throw new RuntimeError('这个容器暂时只能放进标量元素，不支持 ' + cell.kind + '（要比较 struct/pair 请用 sort(v, cmp)）', line)
+  }
   return cell.value === null ? defaultScalar(cell.type) : cell.value
 }
 
@@ -1051,8 +1067,11 @@ function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
 
     case 'container_ctor': {
       if (expr.type.kind !== 'vector') throw new RuntimeError('暂只支持 vector 构造函数表达式', expr.line)
-      const n = Math.max(0, toIndex(yield* evalExpr(rt, expr.size), expr.line))
       const elem = expr.type.elem
+      // vector<int>()：合法的「空 vector」，常写成 g.push_back(vector<int>())、v = vector<int>()。
+      // 早先没处理 0 参数，会拿 undefined 去求值而崩成看不懂的内部讯息。
+      if (!expr.size) return { type: 'int', v: 0, cell: allocVector(elem, 0, undefined, rt.structs) }
+      const n = Math.max(0, toIndex(yield* evalExpr(rt, expr.size), expr.line))
       let cell: Cell
       if (expr.fill && elem.kind === 'scalar') {
         const f = coerceTo(elem.name, yield* evalExpr(rt, expr.fill), expr.line)
@@ -1257,7 +1276,7 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
         })
       } else {
         rt.sortInfo = null
-        part = part.sort((x, y) => scalarCmp(cellScalar(x), cellScalar(y)))
+        part = part.sort((x, y) => scalarCmp(cellScalarElem(x, expr.line), cellScalarElem(y, expr.line)))
       }
     } else {
       rt.sortInfo = null
@@ -1283,7 +1302,7 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     const n = hasN ? Math.min(len, Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line))) : len
     const x = yield* evalExpr(rt, expr.args[hasN ? 2 : 1])
     for (let i = 0; i < n; i++) {
-      if (scalarCmp(cellScalar(lv.cell.cells[i]), x.v) >= 0) {
+      if (scalarCmp(cellScalarElem(lv.cell.cells[i], expr.line), x.v) >= 0) {
         rt.mem.logRead(lv.name, lv.path.concat(i))
         return { type: 'int', v: i }
       }
@@ -1818,6 +1837,9 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   }
 
   if (c.kind === 'set') {
+    // set 的排序与去重都靠 scalarCmp，元素必须是标量。在入口就给明确错误，
+    // 免得学生看到「cellScalar: 非标量」这种内部讯息。
+    scalarName(c.elemType, expr.line)
     if (method === 'insert') {
       if (expr.args.length !== 1) throw new RuntimeError('insert 需要 1 个参数', expr.line)
       const v = yield* evalExpr(rt, expr.args[0])
@@ -2292,7 +2314,7 @@ export function* run(program: Program, opts?: RunOptions): Generator<Snapshot> {
         output: rt.out.join(''),
         callTree: cloneCallTree(rt.callTree),
         activeCallId: rt.activeCallId,
-        error: e.message,
+        error: '内部错误（这是本工具的 bug，请把这段程序反馈给我们）：' + e.message,
       }
       return
     } else {

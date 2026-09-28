@@ -19,17 +19,54 @@ function formatScalar(type: string, value: ScalarValue | null): string {
   return String(value)
 }
 
-function formatCellShort(cell: Cell): string {
+// 容器的「一行摘要」。用在「不是纯量但必须显示」的位置：set 元素、map 的键/值、
+// struct 成员、pair 成员、stack/queue/deque 的元素、数组窗口里的格子……
+// 递归但有深度上限、长度上限，避免出现超长字串。
+function formatListShort(cells: Cell[], depth: number): string {
+  const MAX = 8
+  const parts = cells.slice(0, MAX).map((c) => formatCellShort(c, depth + 1))
+  if (cells.length > MAX) parts.push('…')
+  return '[' + parts.join(', ') + ']'
+}
+
+function collectBstShorts(node: BstNode | null, elemType: Type, out: Cell[]): void {
+  if (!node) return
+  collectBstShorts(node.left, elemType, out)
+  out.push({ kind: 'scalar', type: elemType.kind === 'scalar' ? elemType.name : 'int', value: node.value })
+  collectBstShorts(node.right, elemType, out)
+}
+
+export function formatCellShort(cell: Cell, depth = 0): string {
   if (cell.kind === 'scalar') return formatScalar(cell.type, cell.value)
+  if (depth >= 3) return '…'
   if (cell.kind === 'pair') {
-    const a = cell.first.kind === 'scalar' ? formatScalar(cell.first.type, cell.first.value) : '?'
-    const b = cell.second.kind === 'scalar' ? formatScalar(cell.second.type, cell.second.value) : '?'
-    return a + ',' + b
+    return '(' + formatCellShort(cell.first, depth + 1) + ', ' + formatCellShort(cell.second, depth + 1) + ')'
   }
   if (cell.kind === 'struct') {
-    return '{' + cell.members.map((m) => m.name + ':' + (m.cell.kind === 'scalar' ? formatScalar(m.cell.type, m.cell.value) : '?')).join(',') + '}'
+    return '{' + cell.members.map((m) => m.name + ':' + formatCellShort(m.cell, depth + 1)).join(', ') + '}'
   }
-  return '?'
+  if (cell.kind === 'array' || cell.kind === 'vector') return formatListShort(cell.cells, depth)
+  if (cell.kind === 'deque' || cell.kind === 'stack' || cell.kind === 'queue' || cell.kind === 'pqueue') {
+    return formatListShort(cell.items, depth)
+  }
+  if (cell.kind === 'set') return '{' + formatListShort(cell.items, depth).slice(1, -1) + '}'
+  if (cell.kind === 'tree') return formatListShort(cell.nodes.slice(1), depth)
+  if (cell.kind === 'bst') {
+    const out: Cell[] = []
+    collectBstShorts(cell.root, cell.elemType, out)
+    return formatListShort(out, depth)
+  }
+  if (cell.kind === 'map' || cell.kind === 'umap') {
+    const MAX = 8
+    const parts = cell.entries
+      .slice(0, MAX)
+      .map((e) => formatCellShort(e.key, depth + 1) + ':' + formatCellShort(e.value, depth + 1))
+    if (cell.entries.length > MAX) parts.push('…')
+    return '{' + parts.join(', ') + '}'
+  }
+  if (cell.kind === 'ref') return '&' + cell.target.name
+  // 兜底：Cell 的种类上面已经全部覆盖，这里只是「以后新增种类时不要再出现光秃秃的 '?'」的保险
+  return (cell as Cell).kind
 }
 
 function isHit(set: Set<string>, name: string, path: number[]): boolean {
@@ -516,7 +553,7 @@ function StackView({
         return (
           <div className="stack-row" key={i}>
             <span className="stack-marker">{k === 0 ? 'top' : ''}</span>
-            <div className={cellCls(item, name, p, judges, writes, reads)}>{item.kind === 'scalar' ? formatScalar(item.type, item.value) : '?'}</div>
+            <div className={cellCls(item, name, p, judges, writes, reads)}>{formatCellShort(item)}</div>
           </div>
         )
       })}
@@ -554,7 +591,7 @@ function QueueView({
         const p = path.concat(i)
         return (
           <div className="cell-wrap" key={i}>
-            <div className={cellCls(item, name, p, judges, writes, reads)}>{item.kind === 'scalar' ? formatScalar(item.type, item.value) : '?'}</div>
+            <div className={cellCls(item, name, p, judges, writes, reads)}>{formatCellShort(item)}</div>
             <div className="idx">[{i}]</div>
           </div>
         )
@@ -594,7 +631,7 @@ function DequeView({
         const p = path.concat(i)
         return (
           <div className="cell-wrap" key={i}>
-            <div className={cellCls(item, name, p, judges, writes, reads)}>{item.kind === 'scalar' ? formatScalar(item.type, item.value) : '?'}</div>
+            <div className={cellCls(item, name, p, judges, writes, reads)}>{formatCellShort(item)}</div>
             <div className="idx">[{i}]</div>
           </div>
         )
@@ -633,7 +670,7 @@ function SetView({
         const p = path.concat(i)
         return (
           <div className="cell-wrap" key={i}>
-            <div className={cellCls(item, name, p, judges, writes, reads)}>{item.kind === 'scalar' ? formatScalar(item.type, item.value) : '?'}</div>
+            <div className={cellCls(item, name, p, judges, writes, reads)}>{formatCellShort(item)}</div>
             <div className="idx">[{i}]</div>
           </div>
         )
@@ -671,9 +708,9 @@ function MapView({
         const p = path.concat(i)
         return (
           <div className="map-row" key={i}>
-            <span className="cell map-key">{e.key.kind === 'scalar' ? formatScalar(e.key.type, e.key.value) : '?'}</span>
+            <span className="cell map-key">{formatCellShort(e.key)}</span>
             <span className="map-arrow">→</span>
-            <span className={cellCls(e.value, name, p, judges, writes, reads)}>{e.value.kind === 'scalar' ? formatScalar(e.value.type, e.value.value) : '?'}</span>
+            <span className={cellCls(e.value, name, p, judges, writes, reads)}>{formatCellShort(e.value)}</span>
           </div>
         )
       })}
@@ -778,7 +815,7 @@ function StructArrayView({
                     return (
                       <div className="cell-wrap" key={j}>
                         <div className={cellCls(m.cell, name, p, judges, writes, reads)}>
-                          {m.cell.kind === 'scalar' ? formatScalar(m.cell.type, m.cell.value) : '?'}
+                          {formatCellShort(m.cell)}
                         </div>
                         <div className="idx">[{m.name}]</div>
                       </div>
@@ -826,7 +863,7 @@ function StructView({
           <div className="map-row" key={m.name}>
             <span className="cell map-key">{m.name}</span>
             <span className="map-arrow">=</span>
-            <span className={cellCls(m.cell, name, p, judges, writes, reads)}>{m.cell.kind === 'scalar' ? formatScalar(m.cell.type, m.cell.value) : '?'}</span>
+            <span className={cellCls(m.cell, name, p, judges, writes, reads)}>{formatCellShort(m.cell)}</span>
           </div>
         )
       })}
@@ -854,9 +891,9 @@ function PairView({
   return (
     <div className="pair-view">
       <span className="pair-paren">(</span>
-      <span className={cellCls(c.first, name, path.concat(0), judges, writes, reads)}>{c.first.kind === 'scalar' ? formatScalar(c.first.type, c.first.value) : '?'}</span>
+      <span className={cellCls(c.first, name, path.concat(0), judges, writes, reads)}>{formatCellShort(c.first)}</span>
       <span className="pair-comma">,</span>
-      <span className={cellCls(c.second, name, path.concat(1), judges, writes, reads)}>{c.second.kind === 'scalar' ? formatScalar(c.second.type, c.second.value) : '?'}</span>
+      <span className={cellCls(c.second, name, path.concat(1), judges, writes, reads)}>{formatCellShort(c.second)}</span>
       <span className="pair-paren">)</span>
     </div>
   )
@@ -1581,7 +1618,7 @@ function Windowed1D({
           const p = path.concat(i)
           return (
             <div className="cell-wrap" key={i}>
-              <div className={cellCls(sub, name, p, judges, writes, reads)}>{sub.kind === 'scalar' ? formatScalar(sub.type, sub.value) : '?'}</div>
+              <div className={cellCls(sub, name, p, judges, writes, reads)}>{formatCellShort(sub)}</div>
               <div className="idx">[{i}]</div>
             </div>
           )
@@ -1696,7 +1733,7 @@ function Windowed2D({
                     const p = path.concat(i, j)
                     return (
                       <div className="cell-wrap" key={j}>
-                        <div className={cellCls(sub, name, p, judges, writes, reads)}>{sub.kind === 'scalar' ? formatScalar(sub.type, sub.value) : '?'}</div>
+                        <div className={cellCls(sub, name, p, judges, writes, reads)}>{formatCellShort(sub)}</div>
                         <div className="idx">[{j}]</div>
                       </div>
                     )

@@ -167,6 +167,32 @@ for (const p of PRESETS) {
   check('排序统计横幅有渲染出来', sawBanner)
 }
 
+// ---------- 容器当值：画面上不能再出现一格 '?' ----------
+// 使用者回报：「map 的值是 vector 时，画面上显示 ?」。根因是面板里十几处
+// 「不是标量就给 '?'」的退路。这里从 DOM 层锁住那几个具体位置。
+{
+  const cases: [string, string[], string[]][] = [
+    ['map 的值是 vector', [], ['map<string, vector<int>> m; m["a"].push_back(5); m["a"].push_back(6);']],
+    ['struct 的成员是 vector', ['struct P { int x; vector<int> v; };'], ['P p; p.x = 1; p.v.push_back(3);']],
+    ['pair 的成员是 vector', [], ['pair<int, vector<int>> p; p.first = 1; p.second.push_back(9);']],
+    ['stack 的元素是 vector', [], ['stack<vector<int>> s; vector<int> v; v.push_back(1); s.push(v);']],
+  ]
+  for (const [name, pre, body] of cases) {
+    const src = ['#include <bits/stdc++.h>', 'using namespace std;'].concat(pre).concat(['int main() {']).concat(body.map((b) => '  ' + b)).concat(['  return 0;', '}', '']).join('\n')
+    let last: any = null
+    try {
+      for (const s of run(parse(src), {})) last = s
+    } catch (e) { check(name + ' 可执行', false, (e as Error).message); continue }
+    if (last && last.error) { check(name + ' 可执行', false, '运行报错: ' + last.error); continue }
+    let h = ''
+    try { h = renderToStaticMarkup(createElement(VariablesPanel, { snapshot: last })) } catch (e) {
+      check(name + ' 可渲染', false, (e as Error).message)
+      continue
+    }
+    check(name + ' 画面上没有 ?', h.indexOf('>?') < 0, '出现了 ?')
+  }
+}
+
 console.log('-'.repeat(88))
 console.log('==== render-test: ' + pass + ' 通过, ' + fail + ' 失败 ====')
 if (fail > 0) process.exit(1)

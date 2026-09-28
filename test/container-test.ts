@@ -67,5 +67,19 @@ eq('回归：struct 存容器', 'struct P{int x;}; int main(){ vector<P> v; P p;
   eq('★ 单一数字', prog, '2 ', '2')
 }
 
+// ---------- vector<int>() 空构造式 + 内层初始化列表 ----------
+// 起因：学生写 g.push_back(vector<int>()) 时，解释器拿 undefined 去求值，
+// 崩成「Cannot read properties of undefined (reading 'kind')」这种看不懂的内部讯息。
+eq('vector<int>() 当空 vector', 'int main(){ vector<vector<int>> g; g.push_back(vector<int>()); cout<<g.size()<<g[0].size(); return 0; }', '10')
+eq('v = vector<int>() 赋值成空 vector', 'int main(){ vector<int> v; v.push_back(1); v=vector<int>(); cout<<v.size(); return 0; }', '0')
+eq('vector<int>(3) 带大小（回归）', 'int main(){ vector<vector<int>> g; g.push_back(vector<int>(3)); cout<<g[0].size(); return 0; }', '3')
+eq('g.push_back({1,2}) 内层初始化列表', 'int main(){ vector<vector<int>> g; g.push_back({1,2}); g.push_back({3}); cout<<g[0][1]<<g[1][0]<<g.size(); return 0; }', '232')
+eq('vector<vector<int>> 空行可再填', 'int main(){ vector<vector<int>> g; g.push_back(vector<int>()); g[0].push_back(4); cout<<g[0][0]; return 0; }', '4')
+
+// ---------- 不支援的组合要给「人看得懂」的错误，不能外泄内部讯息 ----------
+err('set<容器> 明确报错', 'int main(){ set<vector<int>> s; vector<int> v; v.push_back(1); s.insert(v); return 0; }', '只支持标量')
+err('sort(vector<容器>) 明确报错', 'int main(){ vector<vector<int>> g; g.push_back({2}); g.push_back({1}); sort(g); return 0; }', '只能放进标量元素')
+err('lower_bound(vector<容器>) 明确报错', 'int main(){ vector<vector<int>> g; g.push_back({1}); vector<int> x; x.push_back(1); cout<<lower_bound(g,x); return 0; }', '只能放进标量元素')
+
 console.log('==== container-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)
