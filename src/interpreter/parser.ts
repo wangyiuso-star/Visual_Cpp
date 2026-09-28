@@ -584,10 +584,11 @@ class Parser {
     this.expectOp('{')
     const items: InitExpr[] = []
     if (!this.isOp('}')) {
+      // C++ 允许尾逗号：int a[] = {1, 2, 3,};
       do {
         if (this.isOp('{')) items.push(this.parseInitList())
         else items.push({ kind: 'expr', expr: this.parseExpr() })
-      } while (this.eatOp(','))
+      } while (this.eatOp(',') && !this.isOp('}'))
     }
     this.expectOp('}')
     return { kind: 'list', items }
@@ -964,9 +965,10 @@ class Parser {
       this.next()
       const items: Expr[] = []
       if (!this.isOp('}')) {
+        // C++ 允许尾逗号：{2, 3, 7, 13,}
         do {
           items.push(this.parseExpr())
-        } while (this.eatOp(','))
+        } while (this.eatOp(',') && !this.isOp('}'))
       }
       this.expectOp('}')
       return { kind: 'init_list', line: t.line, items }

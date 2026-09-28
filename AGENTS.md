@@ -74,6 +74,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] HKOI 缺口提案第二优先 —— 已做（`#define`（物件式巨集，文字層展開，等長空白保留行號）、`typedef` / `using` 型別別名、`size_t`、三目 `?:`、`sizeof`（動態容器刻意不支援並給教學說明）、`memset`（逐位元組語意）、`fill` / `v.assign` / `min({...})` / `INT_MAX` / `cin.get()`、區間寫法 `sort(v.begin(),v.end())` / `sort(a,a+n)` / `lower_bound(a,a+n,x)`；**踩坑：內建 `fill` 搶走使用者自訂函式名 → 加 `shadowed` 守衛，使用者函式優先**；test/gap-test.ts 127 項）
 - [x] 发布 v0.8.0 —— HKOI 缺口提案第二优先
 - [x] 发布 v0.9.0 —— 右侧卡片拖动排序 + 单卡缩放 + 整行宽 + 持久化
+- [x] 「黑屏」防護 —— 已做（`src/components/ErrorBoundary.tsx`：渲染期错误变成「内部错误 + 訊息 + 堆疊 + 重置」的卡片，不再白屏；App 右側面板已包住 + `resetKey={code}`；面板讀 localStorage 包 try/catch（隱私模式下連讀都會拋 SecurityError，而它在 useState 初始化式裡 → 會炸掉整棵樹）；初始化列表尾逗號 `{1,2,3,}` 是合法 C++，已修；test/crash-test.ts 15 項含契約測試）
+- [x] 发布 v0.9.1 —— 黑屏防護 + 尾逗號
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

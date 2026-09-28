@@ -206,9 +206,7 @@ export default function VariablesPanel({ snapshot }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   // 卡片布局（顺序 / 单卡缩放 / 全宽）持久化在 localStorage：老师排一次就固定下来。
-  const [layout, setLayout] = useState<CardLayout>(() =>
-    loadLayout(typeof localStorage === 'undefined' ? null : localStorage.getItem(LAYOUT_STORAGE_KEY)),
-  )
+  const [layout, setLayout] = useState<CardLayout>(() => readStoredLayout())
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
   useEffect(() => {
@@ -390,6 +388,16 @@ interface CardView {
   onDragOverCard: () => void
   onDragLeaveCard: () => void
   onDropCard: () => void
+}
+
+// 读卡片布局存档。某些隐私设定下 localStorage 连「读」都会抛 SecurityError，
+// 那会让整个面板在渲染期炸掉（使用者看到的就是黑屏）——所以这里一定要守住。
+function readStoredLayout(): CardLayout {
+  try {
+    return loadLayout(typeof localStorage === 'undefined' ? null : localStorage.getItem(LAYOUT_STORAGE_KEY))
+  } catch {
+    return { order: [], zoom: {}, wide: {} }
+  }
 }
 
 function cardClass(base: string, card: CardView): string {

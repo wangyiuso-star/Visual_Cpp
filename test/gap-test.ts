@@ -183,5 +183,12 @@ eq('v.assign(3, 5)', 'int main(){ vector<int> v; v.assign(3,5); cout<<v.size()<<
 eq('max({a,b,c}) 初始化列表', 'int main(){ int a=1,b=9,c=5; cout<<max({a,b,c}); return 0; }', '9')
 eq('cin.get() 讀字元（含空白）', 'int main(){ char a,b; a=cin.get(); b=cin.get(); cout<<"["<<a<<b<<"]"; return 0; }', '[a ]', 'a b')
 err('s.find(x) != s.end() 給迭代器指引', 'int main(){ set<int> s; s.insert(1); if(s.find(1)!=s.end()) cout<<1; return 0; }', '本工具不做迭代器')
+// ---------- 初始化列表的尾逗号（合法 C++，以前报「无法解析 }」）----------
+eq('vector 初始化列表尾逗号', 'int main(){ vector<int> v = {1, 2, 3,}; cout<<v.size()<<v[2]; return 0; }', '33')
+eq('数组初始化列表尾逗号', 'int main(){ int a[] = {1, 2, 3,}; cout<<a[2]; return 0; }', '3')
+eq('嵌套初始化列表尾逗号', 'int main(){ vector<vector<int>> g = {{1, 2},{3,},}; cout<<g[0][1]<<g[1][0]; return 0; }', '23')
+eq('struct 初始化列表尾逗号', 'struct P { int x; int y; }; int main(){ P p = {1, 2,}; cout<<p.y; return 0; }', '2')
+eq('空初始化列表', 'int main(){ vector<int> v = {}; cout<<v.size(); return 0; }', '0')
+eq('空的花括号初始化 int a[2] = {}', 'int main(){ int a[2] = {}; cout<<a[0]<<a[1]; return 0; }', '00')
 console.log('==== gap-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)

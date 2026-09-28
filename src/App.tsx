@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CodeEditor from './components/CodeEditor'
 import VariablesPanel from './components/VariablesPanel'
+import ErrorBoundary from './components/ErrorBoundary'
 import { parse } from './interpreter/parser'
 import { run } from './interpreter/interpreter'
 import type { Snapshot } from './interpreter/interpreter'
@@ -437,7 +438,9 @@ export default function App() {
               <span className="lg"><span className="swatch write" />写入</span>
             </span>
           </div>
-          <VariablesPanel snapshot={cur} />
+          <ErrorBoundary label="panel" resetKey={code}>
+            <VariablesPanel snapshot={cur} />
+          </ErrorBoundary>
         </div>
       </div>
 
