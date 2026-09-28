@@ -34,6 +34,8 @@ npm run dev
 
 **内建**：`min` / `max` / `abs` / `make_pair` / `sort` / `reverse` / `lower_bound` / `swap`
 
+**字串 ↔ 数字**：`stoi` / `stol` / `stoll` / `stod` / `stof`（照 C++ 语义：跳前导空白、可选正负号、读到第一个不合法字符就停；`stoi(s, 0, base)` 支持 2..36 进制；一个数字都没有会明确报错）、`to_string`（int / double / char / string → string）
+
 **表达式**：花括号初始化列表（如 `v.push_back({1,2,3})`）
 
 ## 可视化（右侧面板）

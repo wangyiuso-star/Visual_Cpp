@@ -55,6 +55,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.2.0 —— package.json 0.2.0 + git tag v0.2.0（含三项课堂安全修正）
 - [x] range-based for —— 已做（`for (int/auto x : c)` 值拷贝、`for (auto& x : c)` 引用写回；可迭代 array/vector/deque/set/map/string/tree/bst，stack/queue/pqueue 明确报错；ref cell 加 `origin` 以免循环变量被误标「参数（别名）」；test/rangefor-test.ts 30 项）
 - [x] 发布 v0.3.0 —— range-based for
+- [x] 字串 ↔ 数字内建 —— 已做（`stoi/stol/stoll/stod/stof` 照 C++ 前缀语义 + `stoi(s,0,base)` 2..36 + `to_string`；没数字会明确报错；test/stoi-test.ts 32 项）
+- [x] 发布 v0.4.0 —— stoi / to_string
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

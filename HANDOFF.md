@@ -1,6 +1,11 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-16：**v0.4.0 —— 字串 ↔ 数字内建**（`stoi/stol/stoll/stod/stof` + `to_string`）。
+  - 照 C++ 语义：跳过前导空白、可选正负号、**读到第一个不合法字符就停**（`stoi("12abc")==12`、`stoi("3.9")==3`）；一个数字都没有 → 明确报错「没有可解析的数字」（对应 std::invalid_argument）。
+  - `stoi(s)` 十进制；`stoi(s, 0, base)` 支持 2..36（第 2 个参数 C++ 是 `size_t*` 出参指针，我们没有指针所以忽略它）。进制越界给明确错误。
+  - `to_string`：int / long long / double / char / string → string，与 `cout` 的输出保持一致（bool 受 boolAsInt 开关影响）。
+  - 新增 `test/stoi-test.ts`（32 项，含进制、前缀语义、错误、与 range-for 组合的数位和）；`test/compat-test.ts` 补 3 项。
 - 2026-08-16：**v0.3.0 —— range-based for**（`for (int x : v)` / `for (auto x : v)` / `for (auto& x : v)`）。
   - 实作：`ast.ts` 新增 `range_for` 节点（`declType === null` 表示 auto）；`parser.ts` 在 `parseFor` 开头做**向前扫描 lookahead**（depth 0 先遇 `:` 即范围 for，先遇 `;`/`)` 则维持经典 for）——lexer **不用动**（`:` 本来就在 OPS1）；`interpreter.ts` 新增 `case 'range_for'` + `rangeForSequence()`。
   - 可迭代：array / vector / deque / set / map(元素是 pair) / string(元素是 char) / tree(1 基层级顺序) / bst(中序遍历＝升序)；stack / queue / priority_queue **明确报错**（C++ 没有 begin/end）。容器必须是可定位的变数或其下标/成员（`g[u]` 可以）。

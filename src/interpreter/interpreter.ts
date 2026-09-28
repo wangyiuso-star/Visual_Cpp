@@ -132,6 +132,74 @@ function num(rv: RV, line: number): number {
   return 0
 }
 
+// ---- stoi / stol / stoll / stod / stof 用到的字串前缀解析 ----
+function digitValue(ch: string): number {
+  const c = ch.toLowerCase()
+  if (c >= '0' && c <= '9') return c.charCodeAt(0) - 48
+  if (c >= 'a' && c <= 'z') return c.charCodeAt(0) - 87
+  return -1
+}
+
+function isSpaceChar(c: string): boolean {
+  return c === ' ' || c === '\t' || c === '\n' || c === '\r'
+}
+
+// 照 C++ 的 stoi 语义：跳过前导空白、可选正负号，读到第一个不属于该进制的字符就停。
+// 一个数字都没有 → 明确报错（对应 std::invalid_argument）。
+function parseIntPrefix(raw: string, base: number, line: number, fnName: string): number {
+  let i = 0
+  while (i < raw.length && isSpaceChar(raw.charAt(i))) i++
+  let sign = 1
+  if (raw.charAt(i) === '+') i++
+  else if (raw.charAt(i) === '-') {
+    sign = -1
+    i++
+  }
+  let any = false
+  let acc = 0
+  for (; i < raw.length; i++) {
+    const d = digitValue(raw.charAt(i))
+    if (d < 0 || d >= base) break
+    acc = acc * base + d
+    any = true
+  }
+  if (!any) throw new RuntimeError(fnName + '("' + raw + '") 没有可解析的数字', line)
+  return sign * acc
+}
+
+// stod / stof：同样只解析合法前缀（可选正负号、数字、可选小数、可选指数）
+function parseFloatPrefix(raw: string, line: number, fnName: string): number {
+  let i = 0
+  while (i < raw.length && isSpaceChar(raw.charAt(i))) i++
+  let j = i
+  if (raw.charAt(j) === '+' || raw.charAt(j) === '-') j++
+  let digits = 0
+  while (j < raw.length && raw.charAt(j) >= '0' && raw.charAt(j) <= '9') {
+    j++
+    digits++
+  }
+  if (raw.charAt(j) === '.') {
+    j++
+    while (j < raw.length && raw.charAt(j) >= '0' && raw.charAt(j) <= '9') {
+      j++
+      digits++
+    }
+  }
+  if (digits === 0) throw new RuntimeError(fnName + '("' + raw + '") 没有可解析的数字', line)
+  let k = j
+  if (raw.charAt(k) === 'e' || raw.charAt(k) === 'E') {
+    let m = k + 1
+    if (raw.charAt(m) === '+' || raw.charAt(m) === '-') m++
+    let ed = 0
+    while (m < raw.length && raw.charAt(m) >= '0' && raw.charAt(m) <= '9') {
+      m++
+      ed++
+    }
+    if (ed > 0) j = m
+  }
+  return Number(raw.slice(i, j))
+}
+
 function toIndex(rv: RV, line: number): number {
   const n = num(rv, line)
   if (!Number.isFinite(n)) throw new RuntimeError('非法的下标', line)
@@ -1004,6 +1072,30 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     if (expr.args.length !== 1) throw new RuntimeError('abs 需要 1 个参数', expr.line)
     const a = yield* evalExpr(rt, expr.args[0])
     return { type: a.type, v: Math.abs(num(a, expr.line)) }
+  }
+  if (name === 'stoi' || name === 'stol' || name === 'stoll') {
+    if (expr.args.length < 1) throw new RuntimeError(name + ' 需要 1 个字串参数', expr.line)
+    const raw = yield* evalExpr(rt, expr.args[0])
+    // C++ 的形态是 stoi(s, pos, base)：pos 是指针（我们没有指针），所以第 2 个参数忽略、第 3 个当进制
+    let base = 10
+    if (expr.args.length >= 3) {
+      const b = num(yield* evalExpr(rt, expr.args[2]), expr.line)
+      if (b < 2 || b > 36) throw new RuntimeError(name + ' 的进制必须在 2..36', expr.line)
+      base = Math.trunc(b)
+    }
+    const v = parseIntPrefix(typeof raw.v === 'string' ? raw.v : String(raw.v), base, expr.line, name)
+    return { type: name === 'stoi' ? 'int' : 'long long', v }
+  }
+  if (name === 'stod' || name === 'stof') {
+    if (expr.args.length < 1) throw new RuntimeError(name + ' 需要 1 个字串参数', expr.line)
+    const raw = yield* evalExpr(rt, expr.args[0])
+    const v = parseFloatPrefix(typeof raw.v === 'string' ? raw.v : String(raw.v), expr.line, name)
+    return { type: name === 'stod' ? 'double' : 'float', v }
+  }
+  if (name === 'to_string') {
+    if (expr.args.length !== 1) throw new RuntimeError('to_string 需要 1 个参数', expr.line)
+    const a = yield* evalExpr(rt, expr.args[0])
+    return { type: 'string', v: toStringVal(a, rt.boolAsInt) }
   }
   if (name === 'make_pair') {
     if (expr.args.length !== 2) throw new RuntimeError('make_pair 需要 2 个参数', expr.line)
