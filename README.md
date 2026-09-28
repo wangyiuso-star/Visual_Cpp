@@ -34,6 +34,12 @@ npm run dev
 
 **内建**：`min` / `max` / `abs` / `make_pair` / `sort` / `reverse` / `lower_bound` / `swap`
 
+**字元函数**：`toupper` / `tolower`（回 char）、`isdigit` / `isalpha` / `isupper` / `islower` / `isalnum` / `isspace`（回 bool）
+
+**string / vector 方法**：`s.size()` / `s.length()` / `s.empty()` / `s.at(i)` / `s.front()` / `s.back()` / `s.substr(pos[, len])` / `s.find(str[, pos])` / `s.rfind(str[, pos])` / `s.compare(str)` / `s.push_back(c)` / `s.pop_back()` / `s.append(str)` / `s.insert(pos, str)` / `s.erase(pos[, len])` / `s.replace(pos, len, str)` / `s.clear()`
+｜ `v.size()` / `v.empty()` / `v.at(i)` / `v.front()` / `v.back()` / `v.push_back(x)` / `v.pop_back()` / `v.insert(pos, x)` / `v.erase(pos[, len])` / `v.resize(n)` / `v.clear()`
+（方法可以串接：`s.substr(1).size()`；但**不能对临时值调用修改方法**，会明确报错）
+
 **字串 ↔ 数字**：`stoi` / `stol` / `stoll` / `stod` / `stof`（照 C++ 语义：跳前导空白、可选正负号、读到第一个不合法字符就停；`stoi(s, 0, base)` 支持 2..36 进制；一个数字都没有会明确报错）、`to_string`（int / double / char / string → string）
 
 **表达式**：花括号初始化列表（如 `v.push_back({1,2,3})`）
@@ -103,6 +109,9 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 
 **内建函数**
 - `sort` / `reverse` / `lower_bound` 只接受「容器 (+ 个数)」形式：`sort(v)`、`sort(v, n)`、`reverse(v[, n])`、`lower_bound(v, x)`、`lower_bound(v, n, x)`（`v` 为数组或 vector，升序）
+- `find` / `rfind` 找不到时回 **-1**（本工具没有 `string::npos` 那个巨大值；但**接受写 `string::npos`，它等於 -1**，所以 `if (s.find(x) == string::npos)` 这种惯用写法可以跑）
+- 会改到内容的方法（`at` / `insert` / `erase` / `replace` / `resize` 等）下标越界会**明确报错**（真实 C++ 是未定义行为）
+- 不支持迭代器形式的方法重载（`insert(iter, ...)` / `erase(iter)` / `s.begin()`）
 - **支持自定义比较函数**：`sort(v, cmp)` / `sort(v, n, cmp)`（`cmp(a,b)==true` 表示 a 排前面）。内部是手写的**稳定**归并排序（不是 `Array.prototype.sort`），比较时真的调用用户的 cmp；**比较次数会显示在右侧面板顶部**（教学用，可对复杂度讨论），若 cmp 违反严格弱序会给出警告。旧版会静默忽略第 3 个参数按升序排——那个才是 bug
 - `swap` 仅支持标量（含 `a[i]`、`s[i]` 等下标形式），不支持整个容器互换
 

@@ -793,6 +793,20 @@ class Parser {
 
   parsePrimary(): Expr {
     const t = this.cur()
+    // string::npos —— C++ 里 find 找不到时的返回值。本工具用 -1 表示（find 也回 -1），
+    // 所以 if (s.find(x) == string::npos) 这种惯用写法可以直接跑。
+    if (
+      t.type === 'ident' &&
+      t.value === 'string' &&
+      this.cur(1).type === 'op' &&
+      this.cur(1).value === '::' &&
+      this.cur(2).value === 'npos'
+    ) {
+      this.next()
+      this.next()
+      this.next()
+      return { kind: 'literal', line: t.line, value: -1, litType: 'int' }
+    }
     if (t.type === 'ident' && t.value === 'vector') {
       const type = this.parseType()
       if (this.isOp('(')) {

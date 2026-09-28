@@ -1097,6 +1097,29 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     const a = yield* evalExpr(rt, expr.args[0])
     return { type: 'string', v: toStringVal(a, rt.boolAsInt) }
   }
+  if (name === 'toupper' || name === 'tolower') {
+    if (expr.args.length !== 1) throw new RuntimeError(name + ' 需要 1 个字符参数', expr.line)
+    const a = yield* evalExpr(rt, expr.args[0])
+    const ch = String(a.v)
+    // 单字元的 toUpperCase/toLowerCase 正好就是 ASCII 的转换（非字母不变）
+    return { type: 'char', v: name === 'toupper' ? ch.toUpperCase() : ch.toLowerCase() }
+  }
+  if (name === 'isdigit' || name === 'isalpha' || name === 'isupper' || name === 'islower' || name === 'isalnum' || name === 'isspace') {
+    if (expr.args.length !== 1) throw new RuntimeError(name + ' 需要 1 个字符参数', expr.line)
+    const a = yield* evalExpr(rt, expr.args[0])
+    const ch = String(a.v)
+    const isDig = ch >= '0' && ch <= '9'
+    const isUp = ch >= 'A' && ch <= 'Z'
+    const isLow = ch >= 'a' && ch <= 'z'
+    let res = false
+    if (name === 'isdigit') res = isDig
+    else if (name === 'isalpha') res = isUp || isLow
+    else if (name === 'isupper') res = isUp
+    else if (name === 'islower') res = isLow
+    else if (name === 'isalnum') res = isDig || isUp || isLow
+    else res = ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
+    return { type: 'bool', v: res }
+  }
   if (name === 'make_pair') {
     if (expr.args.length !== 2) throw new RuntimeError('make_pair 需要 2 个参数', expr.line)
     const a = yield* evalExpr(rt, expr.args[0])
@@ -1292,8 +1315,31 @@ function* execCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   return result ?? (resultCell ? { type: 'int', v: 0, cell: resultCell } : { type: 'int', v: 0 })
 }
 
+// 会改到容器的那些方法：不能让它们作用在临时值上（否则改了也没人看得见）
+const MUTATING_METHODS = [
+  'push_back', 'pop_back', 'push_front', 'pop_front', 'push', 'pop',
+  'insert', 'erase', 'replace', 'clear', 'resize',
+]
+
 function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
-  const obj = yield* resolveTarget(rt, expr.object)
+  // 方法的接收者通常是个左值（变量 / 下标 / 成员）；但也允许是临时值，
+  // 这样 s.substr(1).size()、to_string(n).size() 这类串接能用（以前会报误导性的「非法的下标访问」）。
+  const isTempReceiver = expr.object.kind === 'call' || expr.object.kind === 'method_call'
+  let obj: LValue
+  if (isTempReceiver) {
+    if (MUTATING_METHODS.indexOf(expr.method) >= 0) {
+      throw new RuntimeError('不能对临时值调用修改方法 "' + expr.method + '"（请先存成变量）', expr.line)
+    }
+    const rv = yield* evalExpr(rt, expr.object)
+    obj = {
+      name: '',
+      path: [],
+      mem: rt.mem,
+      cell: rv.cell ?? { kind: 'scalar', type: rv.type, value: rv.v },
+    }
+  } else {
+    obj = yield* resolveTarget(rt, expr.object)
+  }
   const method = expr.method
   const c = obj.cell
 
@@ -1311,10 +1357,91 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       return { type: 'string', v: s.substr(pos, len) }
     }
     if (method === 'find') {
-      if (expr.args.length < 1) throw new RuntimeError('find 需要 1 个参数', expr.line)
+      if (expr.args.length < 1) throw new RuntimeError('find 需要 1~2 个参数 (str[, pos])', expr.line)
+      const t = toStringVal(yield* evalExpr(rt, expr.args[0]), rt.boolAsInt)
+      // 第二参 pos：从该下标开始往后找（以前被忽略，属静默错误）
+      const from = expr.args[1] ? Math.max(0, toIndex(yield* evalExpr(rt, expr.args[1]), expr.line)) : 0
+      rt.mem.logRead(obj.name, obj.path)
+      // 找不到回 -1（本工具没有 string::npos，教材请统一用 -1）
+      return { type: 'int', v: s.indexOf(t, from) }
+    }
+    if (method === 'rfind') {
+      if (expr.args.length < 1) throw new RuntimeError('rfind 需要 1~2 个参数 (str[, pos])', expr.line)
+      const t = toStringVal(yield* evalExpr(rt, expr.args[0]), rt.boolAsInt)
+      const from = expr.args[1] ? toIndex(yield* evalExpr(rt, expr.args[1]), expr.line) : s.length - 1
+      rt.mem.logRead(obj.name, obj.path)
+      return { type: 'int', v: s.lastIndexOf(t, Math.min(from, s.length - 1)) }
+    }
+    if (method === 'empty') {
+      rt.mem.logRead(obj.name, obj.path)
+      return { type: 'bool', v: s.length === 0 }
+    }
+    if (method === 'at' || method === 'front' || method === 'back') {
+      if (s.length === 0) throw new RuntimeError(method + ' 对空 string 无意义', expr.line)
+      let idx = 0
+      if (method === 'at') {
+        if (expr.args.length !== 1) throw new RuntimeError('at 需要 1 个参数', expr.line)
+        idx = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      } else if (method === 'back') {
+        idx = s.length - 1
+      }
+      if (idx < 0 || idx >= s.length) throw new RuntimeError('string 下标 ' + idx + ' 越界（长度 ' + s.length + '）', expr.line)
+      rt.mem.logRead(obj.name, obj.path.concat(idx))
+      return { type: 'char', v: s.charAt(idx) }
+    }
+    if (method === 'push_back') {
+      if (expr.args.length !== 1) throw new RuntimeError('push_back 需要 1 个字符', expr.line)
+      const ch = coerceTo('char', yield* evalExpr(rt, expr.args[0]), expr.line)
+      obj.mem.setScalar(obj.name, obj.path, s + String(ch))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'pop_back') {
+      if (s.length === 0) throw new RuntimeError('对空 string 调用 pop_back', expr.line)
+      obj.mem.setScalar(obj.name, obj.path, s.slice(0, -1))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'append') {
+      if (expr.args.length !== 1) throw new RuntimeError('append 需要 1 个参数', expr.line)
+      const t = toStringVal(yield* evalExpr(rt, expr.args[0]), rt.boolAsInt)
+      obj.mem.setScalar(obj.name, obj.path, s + t)
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'insert') {
+      if (expr.args.length !== 2) throw new RuntimeError('insert 需要 2 个参数 (pos, str)', expr.line)
+      const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      if (pos < 0 || pos > s.length) throw new RuntimeError('insert 位置 ' + pos + ' 越界（长度 ' + s.length + '）', expr.line)
+      const t = toStringVal(yield* evalExpr(rt, expr.args[1]), rt.boolAsInt)
+      obj.mem.setScalar(obj.name, obj.path, s.slice(0, pos) + t + s.slice(pos))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'erase') {
+      if (expr.args.length < 1) throw new RuntimeError('erase 需要 1~2 个参数 (pos[, len])', expr.line)
+      const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      if (pos < 0 || pos > s.length) throw new RuntimeError('erase 位置 ' + pos + ' 越界（长度 ' + s.length + '）', expr.line)
+      const len = expr.args[1] ? toIndex(yield* evalExpr(rt, expr.args[1]), expr.line) : s.length - pos
+      obj.mem.setScalar(obj.name, obj.path, s.slice(0, pos) + s.slice(pos + Math.max(0, len)))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'replace') {
+      if (expr.args.length !== 3) throw new RuntimeError('replace 需要 3 个参数 (pos, len, str)', expr.line)
+      const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      const len = toIndex(yield* evalExpr(rt, expr.args[1]), expr.line)
+      if (pos < 0 || pos > s.length) throw new RuntimeError('replace 位置 ' + pos + ' 越界（长度 ' + s.length + '）', expr.line)
+      const t = toStringVal(yield* evalExpr(rt, expr.args[2]), rt.boolAsInt)
+      obj.mem.setScalar(obj.name, obj.path, s.slice(0, pos) + t + s.slice(pos + Math.max(0, len)))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'compare') {
+      if (expr.args.length !== 1) throw new RuntimeError('compare 需要 1 个参数', expr.line)
       const t = toStringVal(yield* evalExpr(rt, expr.args[0]), rt.boolAsInt)
       rt.mem.logRead(obj.name, obj.path)
-      return { type: 'int', v: s.indexOf(t) }
+      return { type: 'int', v: s < t ? -1 : s > t ? 1 : 0 }
     }
     if (method === 'clear') {
       obj.mem.setScalar(obj.name, obj.path, '')
@@ -1347,6 +1474,52 @@ function* execMethodCall(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
     if (method === 'empty') {
       rt.mem.logRead(obj.name, obj.path)
       return { type: 'bool', v: c.cells.length === 0 }
+    }
+    if (method === 'front' || method === 'back' || method === 'at') {
+      if (c.cells.length === 0) throw new RuntimeError(method + ' 对空 vector 无意义', expr.line)
+      let idx = 0
+      if (method === 'at') {
+        if (expr.args.length !== 1) throw new RuntimeError('at 需要 1 个参数', expr.line)
+        idx = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      } else if (method === 'back') {
+        idx = c.cells.length - 1
+      }
+      if (idx < 0 || idx >= c.cells.length) throw new RuntimeError('vector 下标 ' + idx + ' 越界（长度 ' + c.cells.length + '）', expr.line)
+      rt.mem.logRead(obj.name, obj.path.concat(idx))
+      const el = c.cells[idx]
+      return el.kind === 'scalar' ? { type: el.type, v: el.value === null ? defaultScalar(el.type) : el.value } : { type: 'int', v: 0, cell: el }
+    }
+    if (method === 'resize') {
+      if (expr.args.length < 1) throw new RuntimeError('resize 需要至少 1 个参数', expr.line)
+      const n = Math.max(0, toIndex(yield* evalExpr(rt, expr.args[0]), expr.line))
+      const cells = c.cells.slice()
+      while (cells.length > n) cells.pop()
+      while (cells.length < n) cells.push(allocFromType(c.elemType, [], true, rt.structs))
+      obj.mem.updateAt(obj.name, obj.path, () => ({ ...c, cells }))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'insert') {
+      if (expr.args.length !== 2) throw new RuntimeError('insert 需要 2 个参数 (pos, val)', expr.line)
+      const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      if (pos < 0 || pos > c.cells.length) throw new RuntimeError('insert 位置 ' + pos + ' 越界（长度 ' + c.cells.length + '）', expr.line)
+      const item = yield* buildElemCell(rt, c.elemType, expr.args[1], expr.line)
+      const cells = c.cells.slice()
+      cells.splice(pos, 0, item)
+      obj.mem.updateAt(obj.name, obj.path, () => ({ ...c, cells }))
+      rt.mem.logWrite(obj.name, obj.path.concat(pos))
+      return { type: 'int', v: 0 }
+    }
+    if (method === 'erase') {
+      if (expr.args.length < 1) throw new RuntimeError('erase 需要 1~2 个参数 (pos[, len])', expr.line)
+      const pos = toIndex(yield* evalExpr(rt, expr.args[0]), expr.line)
+      if (pos < 0 || pos >= c.cells.length) throw new RuntimeError('erase 位置 ' + pos + ' 越界（长度 ' + c.cells.length + '）', expr.line)
+      const len = expr.args[1] ? toIndex(yield* evalExpr(rt, expr.args[1]), expr.line) : 1
+      const cells = c.cells.slice()
+      cells.splice(pos, Math.max(0, len))
+      obj.mem.updateAt(obj.name, obj.path, () => ({ ...c, cells }))
+      rt.mem.logWrite(obj.name, obj.path)
+      return { type: 'int', v: 0 }
     }
     if (method === 'clear') {
       rt.mem.logWrite(obj.name, obj.path)

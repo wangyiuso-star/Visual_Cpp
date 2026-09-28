@@ -1,6 +1,15 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-16：**v0.5.0 —— string / vector 常用成员 + 字元函数，并修掉 `find` 的静默错误**。
+  - ⚠️ **课堂安全修正**：`s.find(str, pos)` 以前**忽略第二参 pos**（`s.find("l",4)` 在 `"hello"` 上回 2，正解是找不到 → -1）。与当年 `sort` 忽略第三参同一类：静默给错答案。已修，并用测试锁住。
+  - 补齐 string：`empty / at / front / back / rfind / push_back / pop_back / append / insert(pos,str) / erase(pos[,len]) / replace(pos,len,str) / compare`（`substr` 本来两形式就有）。
+  - 补齐 vector：`front / back / at / resize / insert(pos,val) / erase(pos[,len])`。
+  - 新增字元函数：`toupper / tolower`（回 char）＋ `isdigit / isalpha / isupper / islower / isalnum / isspace`（回 bool）→ Unit 6 的「大小写转换、判断字元类别」终于能演示。
+  - **方法可以串接**：`s.substr(1).size()` 以前报误导性的「非法的下标访问」（interpreter 要求接收者是左值）→ 现在临时值上的唯读方法可用；对临时值呼叫**修改**方法给明确错误。
+  - `string::npos` 现在被接受且等於 -1（与 `find` 的回传一致），所以 `if (s.find(x)==string::npos)` 可以直接跑。
+  - 新增 `test/strfunc-test.ts`（58 项）；`test/compat-test.ts` 补 5 项 → 58 项。
+  - ⚠️ **工具教训（这次的坑值得记）**：我加测试时漏了跳脱，写成 `push_back('1')` 的引号被吃掉 → 测试档语法错误 → 打包失败。而执行器把「打包失败」一律记成 **SKIP**，加上我手动跑的指令**没检查打包 exit code**，于是跑到了**旧的 .mjs**，显示 50 通过（实际是新档没打包成功）。**已修执行器**：打包失败要看错误内容——相依外部档不存在才 SKIP，语法的错要算 **FAIL**。教训：**SKIP 必须当作红旗**，且手动跑测试一定要检查打包是否成功（别只看 node 的输出）。
 - 2026-08-16：**v0.4.0 —— 字串 ↔ 数字内建**（`stoi/stol/stoll/stod/stof` + `to_string`）。
   - 照 C++ 语义：跳过前导空白、可选正负号、**读到第一个不合法字符就停**（`stoi("12abc")==12`、`stoi("3.9")==3`）；一个数字都没有 → 明确报错「没有可解析的数字」（对应 std::invalid_argument）。
   - `stoi(s)` 十进制；`stoi(s, 0, base)` 支持 2..36（第 2 个参数 C++ 是 `size_t*` 出参指针，我们没有指针所以忽略它）。进制越界给明确错误。

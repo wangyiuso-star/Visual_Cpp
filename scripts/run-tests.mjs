@@ -25,13 +25,21 @@ for (const f of files) {
   const out = join(dir, base + '.mjs')
   process.stdout.write(base.padEnd(26))
   try {
-    // 打包失敗通常代表這個測試相依的外部檔案不存在（例如跨專案的 hkoi-presets-test）。
-    // 記為 SKIP 而不是 FAIL，本倉庫在別處 clone 也能跑 npm test。
-    execFileSync(rolldown, [join(dir, f), '-o', out, '-f', 'esm', '-p', 'node'], { stdio: 'ignore', shell: isWin })
-  } catch {
-    console.log('SKIP  (無法打包，通常代表相依的外部檔案不存在)')
-    skipped++
-    skippedNames.push(base)
+    // 打包失敗要分兩種情況：
+    //  (a) 相依的外部檔案不存在（例如跨專案的 hkoi-presets-test）→ SKIP，本倉庫在別處 clone 也能跑 npm test
+    //  (b) 測試檔本身有語法錯誤 → 必須 FAIL，否則「壞掉的測試」會被 SKIP 掩蓋成成功
+    execFileSync(rolldown, [join(dir, f), '-o', out, '-f', 'esm', '-p', 'node'], { stdio: 'pipe', shell: isWin })
+  } catch (e) {
+    const msg = String((e && (e.stderr || e.stdout)) || (e && e.message) || '')
+    if (/Could not resolve|Cannot find module|无法解析|ENOENT/i.test(msg)) {
+      console.log('SKIP  (無法打包：相依的外部檔案不存在)')
+      skipped++
+      skippedNames.push(base)
+      continue
+    }
+    console.log('FAIL  (打包失敗，通常是語法錯誤)')
+    failed++
+    failedNames.push(base)
     continue
   }
   try {
