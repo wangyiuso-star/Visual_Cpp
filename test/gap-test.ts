@@ -190,5 +190,9 @@ eq('嵌套初始化列表尾逗号', 'int main(){ vector<vector<int>> g = {{1, 2
 eq('struct 初始化列表尾逗号', 'struct P { int x; int y; }; int main(){ P p = {1, 2,}; cout<<p.y; return 0; }', '2')
 eq('空初始化列表', 'int main(){ vector<int> v = {}; cout<<v.size(); return 0; }', '0')
 eq('空的花括号初始化 int a[2] = {}', 'int main(){ int a[2] = {}; cout<<a[0]<<a[1]; return 0; }', '00')
+// ---------- 不支援的东西要给「讲清楚」的错误（不能静默给错答案）----------
+// 函式多载：以前同名函数定义两次是「后定义的默默生效」→ f(3) 可能跑到 double 版本，答案直接错。
+err('同名函数定义两次要明确报错（以前会默默用后定义的）', 'int f(int x){ return x*10; } int f(double x){ return 1; } int main(){ cout<<f(3); return 0; }', '不支援函数多载')
+err('__builtin_popcount 要说明「位元运算不做」', 'int main(){ cout<<__builtin_popcount(7); return 0; }', '位元运算')
 console.log('==== gap-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)

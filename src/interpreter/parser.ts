@@ -162,6 +162,15 @@ class Parser {
       }
       const fn = this.tryParseFunction()
       if (fn) {
+        // 同名函式定義兩次：C++ 靠參數型別做多載解析（本工具不做），而以前這裡是直接覆蓋，
+        // 於是「後定義的那個」默默生效 —— 那是靜默給錯答案（f(3) 可能跑到 double 版本）。
+        // 所以改成明確報錯，不要讓學生拿到錯的結果。
+        if (functions.has(fn.name)) {
+          throw new ParseError(
+            '不支援函数多载（同名函数定义了两次）："' + fn.name + '"。C++ 会靠参数型别挑一个，本工具做不到，请改用不同的函数名',
+            fn.line,
+          )
+        }
         functions.set(fn.name, fn)
         continue
       }

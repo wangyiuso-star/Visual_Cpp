@@ -1539,6 +1539,10 @@ function* execCall(rt: Runtime, expr: CallExpr): Generator<Snapshot, RV> {
   // 使用者自己定義的函式優先：例如有人把遞迴函式取名 fill（test/arrayparam-test.ts 就是），
   // 內建不該把使用者的名字搶走。
   const shadowed = rt.functions.has(name)
+  // 位元運算與相關內建是「永久排除」（教材編輯決定，見 AGENTS.md）。訊息講清楚，不要只說「未定义的函数」。
+  if (name.startsWith('__builtin_')) {
+    throw new RuntimeError('本工具不做位元运算相关的内建函数（' + name + '；位元运算已决定不做），可以改用迴圈或 x % 2 自己算', expr.line)
+  }
 
   if (name === 'min' || name === 'max') {
     // min({a, b, c}) 這種初始化列表形式也是常見寫法
