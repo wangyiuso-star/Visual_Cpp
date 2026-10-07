@@ -14,117 +14,19 @@ import type {
   StructDef,
 } from './ast'
 
-export interface Snapshot {
-  step: number
-  line: number
-  reads: CellRef[]
-  writes: CellRef[]
-  judges?: CellRef[]
-  condition?: { kind: 'if' | 'while' | 'for'; text: string; result: boolean }
-  vars: VarView[]
-  output: string
-  callTree?: CallNode
-  activeCallId?: number
-  error?: string
-  done?: boolean
-  // 自定义比较函数排序的统计（比较次数刻意做成可见的教学点，见建议书优先 3）
-  sortInfo?: { name: string; n: number; comparisons: number; warned: boolean }
-}
+import {
+  MAX_STEPS,
+  RuntimeError,
+  defaultScalar,
+  isIntegral,
+  truthy,
+} from './runtime'
+import type { CallNode, Frame, LValue, RV, RunOptions, Runtime, Snapshot } from './runtime'
+import { BreakSignal, ContinueSignal, ReturnSignal } from './runtime'
+// 對外的公開型別照舊從 interpreter 匯出（App / 面板 / 測試都是從這裡 import 的）
+export type { CallNode, RunOptions, Snapshot } from './runtime'
+export { RuntimeError } from './runtime'
 
-export interface CallNode {
-  id: number
-  label: string
-  returned: boolean
-  returnValue: string | null
-  locals: { name: string; value: string }[]
-  paramNames: string[]
-  children: CallNode[]
-}
-
-export interface RunOptions {
-  showCond?: { if: boolean; while: boolean; for: boolean }
-  boolAsInt?: boolean
-  input?: string
-}
-
-export class RuntimeError extends Error {
-  line: number
-  constructor(message: string, line: number) {
-    super(message)
-    this.line = line
-    this.name = 'RuntimeError'
-  }
-}
-
-interface RV {
-  type: ScalarTypeName
-  v: ScalarValue
-  cell?: Cell
-}
-
-interface LValue {
-  name: string
-  path: number[]
-  cell: Cell
-  mem: Memory
-  strIdx?: number
-}
-
-class BreakSignal {}
-class ContinueSignal {}
-class ReturnSignal {
-  constructor(public value: RV | null, public cell?: Cell) {}
-}
-
-interface Frame {
-  mem: Memory
-  callId: number
-}
-
-interface Runtime {
-  mem: Memory
-  globals: Memory
-  functions: Map<string, FunctionDef>
-  stack: Frame[]
-  callTree: CallNode
-  activeCallId: number
-  nextCallId: number
-  out: string[]
-  step: number
-  lastLine: number
-  showCond: { if: boolean; while: boolean; for: boolean }
-  boolAsInt: boolean
-  // cin 的游標模型：token 陣列只留著算「總共幾個值」（錯誤訊息用），
-  // 真正的位置記在 inputText/textPos —— getline 必須知道換行在哪。
-  input: string[]
-  inputPos: number
-  inputText: string
-  textPos: number
-  // cout << fixed / setprecision(n) 的輸出狀態（C++ 的串流狀態）
-  floatFixed: boolean
-  floatPrecision: number | null
-  structs: Map<string, StructDef>
-  sortInfo: { name: string; n: number; comparisons: number; warned: boolean } | null
-}
-
-const MAX_STEPS = 20000
-
-function isIntegral(t: ScalarTypeName): boolean {
-  return t === 'int' || t === 'long long' || t === 'char' || t === 'bool'
-}
-
-function truthy(rv: RV): boolean {
-  if (rv.type === 'bool') return rv.v === true
-  if (typeof rv.v === 'number') return rv.v !== 0
-  return (rv.v as string).length > 0
-}
-
-function defaultScalar(type: ScalarTypeName): ScalarValue {
-  if (type === 'bool') return false
-  if (type === 'char') return ''
-  if (type === 'string') return ''
-  return 0
-}
 
 function toStringVal(rv: RV, boolAsInt = false, fmt?: FloatFmt): string {
   if (rv.type === 'char') return rv.v as string
