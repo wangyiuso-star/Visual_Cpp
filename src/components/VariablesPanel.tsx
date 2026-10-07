@@ -12,6 +12,7 @@ import {
   zoomOf,
 } from './panelLayout'
 import type { CardLayout } from './panelLayout'
+import { GRAPH_MAX_NODES, graphTooBigReason } from './graphLimit'
 import { createPortal } from 'react-dom'
 import type { Snapshot, CallNode } from '../interpreter/interpreter'
 import type { VarView, Cell, ScalarValue, BstNode } from '../interpreter/memory'
@@ -19,6 +20,18 @@ import type { Type } from '../interpreter/ast'
 
 const WIN_1D = 10
 const WIN_2D = 5
+// 一次最多画几个元素。stack/queue/deque/set/map 这些「逐项列出」的视图没有窗口机制
+// （数组/2D 有 WIN_1D/WIN_2D 的滑动窗口），元素一多就会一次产生上万个 DOM 节点 → 页面卡死。
+// 所以这里硬性截断并说明还有多少没显示。
+const VIEW_MAX_ITEMS = 300
+
+function HiddenNote({ hidden, total }: { hidden: number; total: number }) {
+  return (
+    <div className="viz-empty" style={{ padding: '4px 0' }}>
+      … 还有 {hidden} 项未显示（共 {total} 项；面板一次最多画 {VIEW_MAX_ITEMS} 项，避免页面卡住）
+    </div>
+  )
+}
 // 调用树缩放范围
 const TREE_Z_MIN = 0.3
 const TREE_Z_MAX = 2
@@ -689,9 +702,12 @@ function StackView({
       </div>
     )
   }
+  // 从栈顶往下画，最多 VIEW_MAX_ITEMS 个
+  const shown = items.slice(Math.max(0, items.length - VIEW_MAX_ITEMS)).reverse()
   return (
     <div className="stack-view">
-      {items.slice().reverse().map((item, k) => {
+      {items.length > VIEW_MAX_ITEMS && <HiddenNote hidden={items.length - VIEW_MAX_ITEMS} total={items.length} />}
+      {shown.map((item, k) => {
         const i = items.length - 1 - k
         const p = path.concat(i)
         return (
@@ -731,7 +747,7 @@ function QueueView({
   return (
     <div className="queue-view">
       <span className="queue-marker">front</span>
-      {items.map((item, i) => {
+      {items.slice(0, VIEW_MAX_ITEMS).map((item, i) => {
         const p = path.concat(i)
         return (
           <div className="cell-wrap" key={i}>
@@ -740,6 +756,7 @@ function QueueView({
           </div>
         )
       })}
+      {items.length > VIEW_MAX_ITEMS && <HiddenNote hidden={items.length - VIEW_MAX_ITEMS} total={items.length} />}
       <span className="queue-marker">back</span>
     </div>
   )
@@ -771,7 +788,7 @@ function DequeView({
   return (
     <div className="queue-view">
       <span className="queue-marker">front</span>
-      {items.map((item, i) => {
+      {items.slice(0, VIEW_MAX_ITEMS).map((item, i) => {
         const p = path.concat(i)
         return (
           <div className="cell-wrap" key={i}>
@@ -780,6 +797,7 @@ function DequeView({
           </div>
         )
       })}
+      {items.length > VIEW_MAX_ITEMS && <HiddenNote hidden={items.length - VIEW_MAX_ITEMS} total={items.length} />}
       <span className="queue-marker">back</span>
     </div>
   )
@@ -810,7 +828,7 @@ function SetView({
   }
   return (
     <div className="queue-view">
-      {items.map((item, i) => {
+      {items.slice(0, VIEW_MAX_ITEMS).map((item, i) => {
         const p = path.concat(i)
         return (
           <div className="cell-wrap" key={i}>
@@ -819,6 +837,7 @@ function SetView({
           </div>
         )
       })}
+      {items.length > VIEW_MAX_ITEMS && <HiddenNote hidden={items.length - VIEW_MAX_ITEMS} total={items.length} />}
     </div>
   )
 }
@@ -848,7 +867,7 @@ function MapView({
   }
   return (
     <div className="map-view">
-      {entries.map((e, i) => {
+      {entries.slice(0, VIEW_MAX_ITEMS).map((e, i) => {
         const p = path.concat(i)
         return (
           <div className="map-row" key={i}>
@@ -858,6 +877,7 @@ function MapView({
           </div>
         )
       })}
+      {entries.length > VIEW_MAX_ITEMS && <HiddenNote hidden={entries.length - VIEW_MAX_ITEMS} total={entries.length} />}
     </div>
   )
 }
@@ -1085,6 +1105,18 @@ function GraphView({
   }
   const edgeSet = new Set<string>()
   for (const ed of edges) edgeSet.add(ed.from + '>' + ed.to)
+  // 规模检查要在画 SVG 之前：这张表若被当成完全图（251k 条边），画下去浏览器就卡死了。
+  const tooBig = graphTooBigReason(N, edges.length)
+  if (tooBig) {
+    return (
+      <div className="viz-empty" style={{ padding: '4px 0' }}>
+        不画成图：{tooBig}。
+        <br />
+        已自动切成「查看表格」的 5×5 视窗（可用滑桿移动），这样才不会卡住。
+      </div>
+    )
+  }
+
   const directed = edges.some((ed) => !edgeSet.has(ed.to + '>' + ed.from))
   const arrowId = 'arrow-' + name.replace(/[^a-zA-Z0-9]/g, '')
 
@@ -1186,7 +1218,10 @@ function AdjListView({
   focus: number[] | undefined
   vars: VarView[]
 }) {
-  const [showTable, setShowTable] = useState(false)
+  // 预设就用表格：节点数已经超标的（例如 501×501 的 DP 表）不要一开始就画图。
+  // 使用者仍可按「查看图」，那时 GraphView 会说明为什么不画，而不是把浏览器卡死。
+  const rows = cell.kind === 'array' ? cell.size : cell.cells.length
+  const [showTable, setShowTable] = useState(rows > GRAPH_MAX_NODES)
   return (
     <div>
       <button className="adj-toggle" onClick={() => setShowTable((s) => !s)}>
