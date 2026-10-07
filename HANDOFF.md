@@ -1,6 +1,24 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**發布 v0.11.0 —— 解耦重構第二批（S0–S9）完成，型別債清零**。
+  - **結果**：`interpreter.ts` **2930 → 113 行**（只剩 `run()` 與公開型別轉出）；`App.tsx` **493 → 206 行**；**`tsc --noEmit` 31 → 0**；測試 36 → **37 檔**（新增 `appshell-test`）。
+  - **模組地圖**（依賴單向、無循環）：
+    ```
+    interpreter.ts  run() + 型別轉出
+          ↓
+       core.ts      求值 / 敘述 / 呼叫（三者互相遞迴 → 必須同檔）
+          ↓
+    snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts
+          ↓（更下層）
+       memory.ts  ast.ts  lexer.ts
+    ```
+    UI：`App.tsx`（版面/接線）→ `usePlayer`（播放器狀態）/ `Topbar` / `Splitter` / `OutputPane` → `VariablesPanel` → `viz/{tree,graph,containers,window,format}`。
+  - **安全網**：`test/interp-golden-test.ts` 的 **31 個 golden 案例**（每一帧 digest 整體雜湊）在每一步都一字不差 —— 這是「拆檔 0 行為差異」的證據。要刻意改行為時 `UPDATE_GOLDEN=1` 重錄並在 commit message 說明。
+  - **新的發版指令**：`npm run verify` = `typecheck` + `test` + `build`（三者都要綠）。`npm run typecheck` 從此是 0 錯誤，任何新增的型別錯誤都看得見。
+  - **每步一個 commit**（方便回檔）：S0 `71bd588`、S1 `bbe7817`、S2 `4149dd0`、S3 `d4cccd7`、S4 `44548bf`、S5 `d9cb389`、S6 `c652c25`、S7 `31e24eb`、S8 `0cbbf8e`、S9 `c2a0c62`。任一步壞掉可 `git revert <sha>`。
+  - **行為修正（S8 順手抓到的靜默錯誤）**：對 set / stack / queue / pair / struct 取下标（`s[0]`）以前會變成 `undefined.length` 崩潰，現在是明確的「不能对 set 取下标」；`int a[] = x`（省略大小卻沒有初始化列表）以前存取 `undefined.items`，現在是明確錯誤。兩者都補了 `compat-test` 斷言。
+  - **還沒做（後續可選）**：其餘 28 個測試檔各自的自訂 harness 尚未統一（簽章不一，見 `ARCHITECTURE.md` §2D）；`core.ts` 826 行裡的 `execCall` / `sizeofOperand` 等主題若再變胖可再拆（§2A）。
 - 2026-08-17：**重構 S0–S1（大工程的逐步拆檔；每步一個 commit，方便回檔）**。計畫與驗證方式見 `ARCHITECTURE.md` §4。
   - **S0（`71bd588`）**：手冊（`ARCHITECTURE.md` 補上「執行計畫 S0–S9」）+ **特性化 golden 測試** `test/interp-golden-test.ts` 與 `test/_golden/interp-golden.txt`（31 個代表性程式，把「每一帧 digest」整體雜湊錄下來）。重構不該改變行為 —— digest 一變就是動到了什麼；要刻意改行為時 `UPDATE_GOLDEN=1` 重錄並在 commit 說明。
   - **S1**：抽出 `src/interpreter/runtime.ts`（118 行）—— `Runtime` 介面、`Snapshot` / `CallNode` / `RunOptions`、`RuntimeError`、`RV` / `LValue` / 三個控制流 signal、`Frame`、`MAX_STEPS`、`isIntegral` / `truthy` / `defaultScalar`。`interpreter.ts` 2930 → **2832** 行；對外公開型別仍從 `interpreter.ts` 轉出（App / 面板 / 測試的 import 不用改）。

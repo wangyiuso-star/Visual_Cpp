@@ -92,10 +92,12 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.9.8 —— 树/2D 卡片并排（面板 ≥800px 自动）
 - [x] 解耦重構第一批 —— 已做（`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/{format,window,containers,graph,tree}`（依賴單向、無循環）；`Windowed2D`/`StructArrayView` 的視窗偏移共用 `useWindowOffset()`；測試改從純函式模組匯入。**盤點與後續計畫寫在 `ARCHITECTURE.md`**：下一個該拆的是 `interpreter.ts`（2930 行））
 - [x] 发布 v0.10.0 —— 解耦重構第一批 + ARCHITECTURE.md
+- [x] 解耦重構第二批（S0–S9，每步一個 commit，方便回檔）—— 已做：`interpreter.ts` **2930 → 113 行**（拆成 `runtime` / `values` / `input` / `builtins`+`cells` / `snapshot` / `core`，依賴單向無循環）、`App.tsx` **493 → 206 行**（`usePlayer` / `Topbar` / `Splitter` / `OutputPane`）、**`tsc --noEmit` 31 → 0**（`npm run typecheck` 進發版流程，另有 `npm run verify`）、測試樣板抽 `test/_helpers.ts`。整個過程用 **31 個 golden 特性化案例**（每帧 digest 整體雜湊）鎖住行為：`test/interp-golden-test.ts`，要刻意改行為時 `UPDATE_GOLDEN=1` 重錄
+- [x] 发布 v0.11.0 —— 解耦重構第二批（S0–S9）+ 型別債清零 + 手冊 ARCHITECTURE.md
 
 ## 下一步
-1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。
-2. 每完成一项更新 HANDOFF.md。
+1. 從待辦裡挑一項（**介面/語言功能**優先：HKOI 第三優先語法、 preset 自帶範例輸入、大圖顯示策略）。
+2. 每完成一項更新 HANDOFF.md；重構/發版步驟見 `ARCHITECTURE.md` §4 與 §3 的規矩。
 
 ## 工作纪律（强制）
 - 每完成一个里程碑更新 HANDOFF.md；状态永远在文件里，不在对话里。
