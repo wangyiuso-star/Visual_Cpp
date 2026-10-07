@@ -1,5 +1,6 @@
 import {
   EMPTY_LAYOUT,
+  TREE_PACK_MIN,
   isWide,
   ZOOM_MAX,
   ZOOM_MIN,
@@ -42,6 +43,13 @@ check('放大到 160% 自动占整行', isWide({ order: [], zoom: { g: 1.6 }, wi
 check('缩小到 80% 不占整行', isWide({ order: [], zoom: { g: 0.8 }, wide: {} }, 'g') === false)
 check('使用者按过整行宽就一直是整行', isWide({ order: [], zoom: {}, wide: { g: true } }, 'g') === true)
 check('别的卡片的关键字不会互相影响', isWide({ order: [], zoom: { g: 1.6 }, wide: {} }, 'h') === false)
+// auto = 树/调用树在「面板不够宽」时的预设行为
+check('树在窄面板时占整行（auto）', isWide(EMPTY_LAYOUT, 't', true) === true)
+check('面板够宽时树不占整行（auto=false）', isWide(EMPTY_LAYOUT, 't', false) === false)
+check('手动按过半宽 → 就算 auto 要它占整行也听手动的', isWide({ order: [], zoom: {}, wide: { t: false } }, 't', true) === false)
+check('手动按过整行 → 就算 auto 说不用也占整行', isWide({ order: [], zoom: {}, wide: { t: true } }, 't', false) === true)
+check('放大 >100% 一律占整行（就算手动选过半宽）', isWide({ order: [], zoom: { t: 1.6 }, wide: { t: false } }, 't', false) === true)
+check('并排门槛是个合理的数字（≥800px）', TREE_PACK_MIN >= 800, String(TREE_PACK_MIN))
 
 // ---------- 拖动排序 ----------
 eqArr('拖到谁身上就占谁的位置（往前）', moveKeyTo(['a', 'b', 'c'], 'c', 'a'), ['c', 'a', 'b'])

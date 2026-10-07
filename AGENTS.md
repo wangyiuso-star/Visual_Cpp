@@ -88,6 +88,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.9.6 —— 多个变量卡片并排
 - [x] 2D 視窗改回固定 5×5 —— 已做（使用者要可預期的大小 + 寫入自動跳轉就夠；`Windowed2D`/`StructArrayView` 拿掉 `useFit`／`winRows`／`cols` 回到 `WIN_2D = 5`，focus 跟隨保留。**1D 視窗仍自適應**（半寬卡片固定 10 格會把陣列擠成兩行）。render-limit-test +4 原始碼契約鎖住「不准再 useFit(WIN_2D」）
 - [x] 发布 v0.9.7 —— 2D 视窗固定 5×5
+- [x] 遞歸樹與 2D array 卡片也能並排 —— 已做（2D 卡片不再佔整行（視窗固定 5×5 後自然寬度只有 ~250px），移除「行長 > 12 就整行」；樹/BST/堆/呼叫樹改成**面板 ≥ `TREE_PACK_MIN = 800px` 才只佔一欄**，用 ResizeObserver 量 `.viz-body`；`isWide(layout, key, auto)` 手動優先（⤢/⤡ 按鈕永遠有效）＋放大 >100% 強制整行；移除 `shapeClass`，CSS 只留 `.card-wide`。panellayout +6、render-test 改寫 +3 契約；35 檔全過）
+- [x] 发布 v0.9.8 —— 树/2D 卡片并排（面板 ≥800px 自动）
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

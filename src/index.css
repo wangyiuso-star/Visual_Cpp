@@ -278,8 +278,9 @@ body {
   gap: 12px;
   align-items: start;
 }
-.shape-square { grid-column: span 1; }
-.shape-horizontal { grid-column: 1 / -1; }
+/* 卡片的栏数改由 JS 的 isWide() 决定（使用者按 ⤢/⤡ ∥ 树在窄面板时占整行 ∥ 放大 >100%）：
+   预设不写 grid-column 就是 span 1，只有 .card-wide 才占整行。 */
+.card-wide { grid-column: 1 / -1; }
 .reorder-btns, .card-controls { margin-left: 8px; display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
 .reorder-btn { cursor: pointer; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; font-size: 11px; line-height: 1.1; padding: 2px 5px; }
 .reorder-btn:hover { color: var(--accent); border-color: var(--accent); }

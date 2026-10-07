@@ -258,22 +258,29 @@ for (const p of PRESETS) {
   try { for (const s of run(parse(src), {})) last = s } catch (e) { check('并排测试可执行', false, (e as Error).message) }
   let h = ''
   try { h = renderToStaticMarkup(createElement(VariablesPanel, { snapshot: last })) } catch (e) { check('并排测试可渲染', false, (e as Error).message) }
-  // 卡片外层的 class 形如 class="var shape-horizontal"，用它判断占几栏。
+  // 卡片外层的 class 由 cardClass() 组成：'var' +（占整行时）' card-wide'。
   // 名字要锚在 </span>NAME<span（caret 之后紧跟变量名），不然单字母名字（s）会误判到别的卡片。
-  const cardOf = (name: string) => {
-    const m = new RegExp('class="var ([a-z-]+)"[\\s\\S]{0,300}?</span>' + name + '<span').exec(h)
+  const cardCls = (name: string) => {
+    const m = new RegExp('class="var([^"]*)"[\\s\\S]{0,300}?</span>' + name + '<span').exec(h)
     return m ? m[1] : ''
   }
-  check('宽的二维表（20 列）占整行', cardOf('memo') === 'shape-horizontal', cardOf('memo'))
-  check('一维数组只占一栏（可以跟别的卡片并排）', cardOf('small3') === 'shape-square', cardOf('small3'))
-  check('pair 只占一栏', cardOf('pt') === 'shape-square', cardOf('pt'))
-  check('字串只占一栏（以前占整行，右边全空）', cardOf('s') === 'shape-square', cardOf('s'))
-  check('树仍然占整行（横向层级布局需要宽度）', cardOf('t') === 'shape-horizontal', cardOf('t'))
-  check('四张一栏的卡片 + 两张整行，等于并排而不是一人一行', [cardOf('small3'), cardOf('pt'), cardOf('s')].every((x) => x === 'shape-square'))
+  const wideCard = (name: string) => cardCls(name).indexOf('card-wide') >= 0
+  check('二维表卡片不再占整行（可以和别的卡片并排）', !wideCard('memo'), cardCls('memo'))
+  check('一维数组只占一栏', !wideCard('small3'), cardCls('small3'))
+  check('pair 只占一栏', !wideCard('pt'), cardCls('pt'))
+  check('字串只占一栏（以前占整行，右边全空）', !wideCard('s'), cardCls('s'))
+  // SSR 量不到面板宽度（panelW = 0）→ 树的自动规则当作「窄面板」→ 占整行。
+  // 量到宽度之后（浏览器里）面板够宽就会并排，这里只锁「窄面板时仍然占整行」。
+  check('树在窄面板（或还没量到宽度）时仍然占整行', wideCard('t'), cardCls('t'))
   const css = readFileSync('src/index.css', 'utf8')
   check('网格用 auto-fill 自动并排（不是写死两列/单列）', /grid-template-columns:\s*repeat\(auto-fill/.test(css))
   check('窄屏也是 auto-fill（不再硬退成单列）', (css.match(/grid-template-columns:\s*repeat\(auto-fill/g) || []).length >= 2)
-  check('卡片的自适应窗口会量宽度（useFit）', /function useFit/.test(readFileSync('src/components/VariablesPanel.tsx', 'utf8')))
+  check('一维视窗才自适应（useFit(WIN_1D)）', /useFit\(WIN_1D/.test(readFileSync('src/components/VariablesPanel.tsx', 'utf8')))
+  const panelSrc = readFileSync('src/components/VariablesPanel.tsx', 'utf8')
+  check('面板会量自己的宽度（决定树要不要占整行）', /panelW/.test(panelSrc) && /ResizeObserver/.test(panelSrc))
+  const layoutSrc = readFileSync('src/components/panelLayout.ts', 'utf8')
+  check('有「面板够宽就让树并排」的门槛常数', /export const TREE_PACK_MIN = \d+/.test(layoutSrc))
+  check('isWide 接受 auto 参数（手动选择优先）', /function isWide\(layout: CardLayout, key: string, auto = false\)/.test(layoutSrc))
 }
 console.log('-'.repeat(88))
 console.log('==== render-test: ' + pass + ' 通过, ' + fail + ' 失败 ====')

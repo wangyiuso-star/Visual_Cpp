@@ -26,11 +26,21 @@ export function zoomOf(layout: CardLayout, key: string): number {
   return z === undefined ? 1 : clampZoom(z)
 }
 
-// 这张卡片要不要占整行：使用者自己按过 ⤢，或放大超过 100%。
-// 放大的卡片占整行才有足夠空間（半寬的格子扣掉 zoom 的寬度補償後會比內容量還窄，
-// 固定尺寸的內容就會撐出橫向捲軸）。
-export function isWide(layout: CardLayout, key: string): boolean {
-  return !!layout.wide[key] || zoomOf(layout, key) > 1
+// 面板窄于这个宽度时，树/调用树这种「横向层级布局」的卡片占整行；
+// 面板够宽（右边比例拉大 / 屏幕够大）就让它们只占一栏，好跟别的卡片并排。
+// 800px ≈ 两个 400px 的栏位，所以并排之后每张树卡片还有 ~390px 可以画（配合它的「适应」按钮）。
+// 使用者随时可以按卡片上的 ⤢/⤡ 手动覆盖（手动选过之后就以手动为准）。
+export const TREE_PACK_MIN = 800
+
+// 这张卡片要不要占整行：
+//   1. 使用者手动按过 ⤢ / ⤡ → 以手动为准；
+//   2. 没手动过 → 看 auto（树/调用树在窄面板时才占整行）；
+//   3. 另外「放大超过 100%」一律占整行 —— 放大的卡片需要空间，
+//      半宽的格子扣掉 zoom 的宽度补偿后会比内容还窄，固定尺寸的内容就会撑出横向卷轴。
+export function isWide(layout: CardLayout, key: string, auto = false): boolean {
+  const explicit = layout.wide[key]
+  const base = explicit === undefined ? auto : explicit
+  return base || zoomOf(layout, key) > 1
 }
 
 // 拖动排序的语义：拖到谁身上，就占谁的位置（其余的顺移）。

@@ -3,6 +3,7 @@ import type { DragEvent, ReactNode } from 'react'
 import {
   LAYOUT_STORAGE_KEY,
   ZOOM_STEP,
+  TREE_PACK_MIN,
   clampZoom,
   loadLayout,
   isWide,
@@ -114,26 +115,11 @@ function kindPriority(cell: Cell): number {
   return 2 // 数组/vector/队列/set/map
 }
 
-// 形状分类：决定这张卡片占几栏（shape-square = 一栏，shape-horizontal = 整行）。
-// 原则（v0.9.6 改）：**预设一栏，让多张卡片能并排**；只有真的需要横向空间的才占整行 ——
-// 树/堆（横向层级布局）与「很宽的二维表」（例如 501 列的 DP 表）。
-// 一维数组/字串/set/map 这些以前占整行，结果宽屏幕上一张卡片一行、右边永远是空的；
-// 它们现在都只有一栏，格子数会跟着卡片实际宽度自动调整（见 useFit），所以不会被挤成两行。
-function shapeClass(cell: Cell): string {
-  const k = cell.kind
-  if (k === 'scalar' && cell.type === 'string') return 'shape-square'
-  if (k === 'queue' || k === 'deque' || k === 'set' || k === 'map' || k === 'umap') return 'shape-square'
-  if (k === 'array' || k === 'vector') {
-    if (cell.elemType.kind === 'scalar') return 'shape-square'
-    // 二维容器：宽的（行很长，例如 DP 表 501 列）给它整行，才拿得到宽度显示更多列；
-    // 行短的（例如 3×3 或邻接表）维持半宽，好让别的变量卡片并排放在它旁边。
-    let maxCols = 0
-    for (const row of cell.cells) maxCols = Math.max(maxCols, row.kind === 'vector' || row.kind === 'array' ? (row.kind === 'array' ? row.size : row.cells.length) : 0)
-    return maxCols > 12 ? 'shape-horizontal' : 'shape-square'
-  }
-  // 树 / 堆（堆也画成完全二叉树）与调用树同样占满整行，避免被半宽挤成"小窗口"
-  if (k === 'tree' || k === 'bst' || k === 'pqueue') return 'shape-horizontal'
-  return 'shape-square' // stack/pair
+// 卡片占几栏现在完全由 isWide()（使用者选择 ∥ 树在窄面板时占整行 ∥ 放大）决定，
+// 不再看容器种类 —— 二维视窗固定 5×5 之后，连 DP 表卡片也不需要整行了。
+// 这里只留「树/堆（含调用树）算不算横向层级布局」的判断，给 isWide 的 auto 用。
+function isTreeLike(cell: Cell): boolean {
+  return cell.kind === 'tree' || cell.kind === 'bst' || cell.kind === 'pqueue'
 }
 
 type PanelItem = { kind: 'calltree' } | { kind: 'container'; v: VarView }
@@ -230,6 +216,24 @@ export default function VariablesPanel({ snapshot }: Props) {
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   // 卡片布局（顺序 / 单卡缩放 / 全宽）持久化在 localStorage：老师排一次就固定下来。
   const [layout, setLayout] = useState<CardLayout>(() => readStoredLayout())
+  // 面板宽度：树/调用树这种横向层级布局，只有面板够宽（≥ TREE_PACK_MIN）时才让它跟别的卡片并排。
+  // 0 = 还没量到（第一帧 / SSR）→ 当作窄面板，先占整行，量到之后自然会并排。
+  const [panelW, setPanelW] = useState(0)
+  const panelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      setPanelW((prev) => (prev === w ? prev : w))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const treeAutoWide = panelW <= 0 || panelW < TREE_PACK_MIN
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
   useEffect(() => {
@@ -293,10 +297,10 @@ export default function VariablesPanel({ snapshot }: Props) {
   }
 
   // 每张卡片的拖动 / 缩放状态与操作打包成一个对象，两种卡片（容器卡、调用树卡）共用。
-  function cardView(key: string): CardView {
+  function cardView(key: string, autoWide = false): CardView {
     return {
       zoom: zoomOf(layout, key),
-      wide: isWide(layout, key),
+      wide: isWide(layout, key, autoWide),
       dragging: dragKey === key,
       over: !!dragKey && dragKey !== key && overKey === key,
       onZoom: (steps) =>
@@ -306,10 +310,12 @@ export default function VariablesPanel({ snapshot }: Props) {
       // 畫面不會有任何變化（因為 zoom 還是 >1），會讓人以為按鈕壞了 —— 所以這一按順便把縮放回到 100%。
       onToggleWide: () =>
         setLayout((prev) => {
+          // 放大时卡片本来就占整行（见 isWide）：这一按顺便回到 100%，否则按了看不出变化
           if (zoomOf(prev, key) > 1) {
             return { ...prev, zoom: { ...prev.zoom, [key]: 1 }, wide: { ...prev.wide, [key]: false } }
           }
-          return { ...prev, wide: { ...prev.wide, [key]: !prev.wide[key] } }
+          // 以「目前看起来是整行还是半宽」为准来翻，才不会出现「按了没反应」
+          return { ...prev, wide: { ...prev.wide, [key]: !isWide(prev, key, autoWide) } }
         }),
       onDragStart: () => {
         setDragKey(key)
@@ -330,7 +336,7 @@ export default function VariablesPanel({ snapshot }: Props) {
   }
 
   return (
-    <div className="viz-body">
+    <div className="viz-body" ref={panelRef}>
       {snapshot.sortInfo && (
         <div className="sort-banner">
           <span className="sort-label">排序</span>
@@ -358,14 +364,14 @@ export default function VariablesPanel({ snapshot }: Props) {
               if (item.kind === 'calltree') {
                 return (
                   <div
-                    className={cardClass('calltree-section shape-horizontal', cardView('@calltree'))}
+                    className={cardClass('calltree-section', cardView('@calltree', true))}
                     key="calltree"
-                    {...cardDragProps(cardView('@calltree'))}
+                    {...cardDragProps(cardView('@calltree', true))}
                   >
                     <div className="calltree-title" onClick={() => setTreeCollapsed((t) => !t)}>
                       <span className="caret">{treeCollapsed ? '▸' : '▾'}</span>
                       递归树 / 调用树
-                      <CardControls card={cardView('@calltree')} onMove={(dir) => moveItem('@calltree', dir)} />
+                      <CardControls card={cardView('@calltree', true)} onMove={(dir) => moveItem('@calltree', dir)} />
                     </div>
                     {!treeCollapsed && <CallTreeGraph root={snapshot.callTree!} activeCallId={snapshot.activeCallId ?? 0} />}
                   </div>
@@ -382,9 +388,8 @@ export default function VariablesPanel({ snapshot }: Props) {
                   collapsed={!!collapsed[item.v.name]}
                   onToggle={() => toggleCollapse(item.v.name)}
                   vars={snapshot.vars}
-                  shape={shapeClass(item.v.cell)}
                   onMove={(dir) => moveItem(item.v.name, dir)}
-                  card={cardView(item.v.name)}
+                  card={cardView(item.v.name, isTreeLike(item.v.cell))}
                 />
               )
             })}
@@ -533,7 +538,6 @@ function VarItem({
   collapsed,
   onToggle,
   vars,
-  shape,
   onMove,
   card,
 }: {
@@ -545,12 +549,11 @@ function VarItem({
   collapsed: boolean
   onToggle: () => void
   vars: VarView[]
-  shape: string
   onMove: (dir: -1 | 1) => void
   card: CardView
 }) {
   return (
-    <div className={cardClass('var ' + shape, card)} {...cardDragProps(card)}>
+    <div className={cardClass('var', card)} {...cardDragProps(card)}>
       <div className="var-name" onClick={onToggle}>
         <span className="caret">{collapsed ? '▸' : '▾'}</span>
         {v.name}

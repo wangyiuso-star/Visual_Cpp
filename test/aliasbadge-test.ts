@@ -21,7 +21,10 @@ function render(s: any) { return renderToStaticMarkup(createElement(VariablesPan
 // 把 HTML 依卡片切開：{ name, hasAlias, writes }
 function cards(html: string) {
   const out: { name: string; hasAlias: boolean; writes: number }[] = []
-  for (const part of html.split('<div class="var ').slice(1)) {
+  // 卡片外層是 <div class="var">（佔整行時 <div class="var card-wide">）。
+  // 先把 card-wide 正規化掉再用純字串切，避免 <div class="var-name">（那在卡片裡面）被誤切。
+  const norm = html.split('<div class="var card-wide"').join('<div class="var"')
+  for (const part of norm.split('<div class="var"').slice(1)) {
     const name = (part.match(/class="caret">[^<]*<\/span>([A-Za-z_][A-Za-z0-9_]*)/) || [])[1] || '?'
     out.push({ name, hasAlias: part.indexOf('alias-badge') >= 0, writes: (part.match(/class="cell write"/g) || []).length })
   }
