@@ -1,0 +1,32 @@
+# 特性化 golden（v0.10.x 錄製）—— 重構不該改變行為；刻意改變請 UPDATE_GOLDEN=1 重錄並在 commit 說明
+基本運算與輸出	5	17f14e1e	
+一維陣列 + 初始化列表	4	eca2e61b	
+二維陣列	4	85e25948	
+vector 基本操作	8	3fd1180b	
+二維 vector 矩陣	5	5eb81f28	
+容器當值（回傳 + 賦值）	9	2505a466	
+map / set / unordered_map	9	fae1ba87	
+struct 與 pair	7	61b540ac	
+sort / greater / reverse / lower_bound	12	3cd0c611	
+sort + 自訂 cmp（含比較次數）	23	1e781275	
+tree / bst / priority_queue	13	3422c757	
+do-while	21	56ca56cf	
+range-for（值 vs 引用）	16	81ee5d38	
+string 方法	5	f54f9178	
+字元函式 + 字元算術	10	ab63693b	
+stoi / to_string / 進制	3	3fea4ed0	
+C 風格轉型	4	9791183f	
+三目 / INT_MAX / min({...})	6	1efaa864	
+typedef / using / size_t	6	0e9f46c1	
+#define	5	ab8aa7cd	
+sizeof / memset / fill / assign	8	a45e55bb	
+cin 鏈式讀入	7	97b336e7	
+while (cin >> x) 讀到 EOF	16	e4bd5d94	
+getline 的經典陷阱	7	0c438476	
+getline + cin.ignore	8	3c5f06a3	
+cin 讀不足（明確錯誤）	3	15a7aa50	cin 输入不足：程式要读第 1 个值，但「cin 输入」框只提供了 0 个（用空白分隔）
+函式：引用 / const& / 陣列形參 / 遞迴	35	facfb279	
+同名函式定義兩次（多載 → 明確報錯）	0	c1afbd47	PARSE: 不支援函数多载（同名函数定义了两次）："f"。C++ 会靠参数型别挑一个，本工具做不到，请改用不同的函数名
+執行期錯誤：除以 0	3	826094ff	除数为 0
+執行期錯誤：陣列越界	2	580fb941	下标 5 越界（长度 2）
+501x501 記憶化 DP（摘要要截斷）	118	67a08454	

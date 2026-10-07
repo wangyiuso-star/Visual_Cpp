@@ -60,3 +60,28 @@
 3. **渲染層測試是搬檔案的安全網**：`render-test` / `hkoi-presets-test` / `render-limit-test` 會把所有 preset 的每一幀渲染成 HTML，搬家後跑 `npm test` 就知道有沒有漏東西。
 4. **手動跑單一測試一定要先重新打包**：`rolldown test/x.ts -o test/x.mjs -f esm -p node` 再 `node test/x.mjs`，否則看的是舊 bundle（這個坑踩過兩次）。
 
+## 4. 執行計畫（逐步 commit，方便回檔）
+
+**規矩**：每一步都 ①先跑 `npm test`（含特性化 golden）②一個 commit（`refactor(S<N>): …`）③推送。
+任一步壞掉就 `git revert <sha>`（已推送）或 `git reset --hard <上一步 sha>`（還沒推送）—— 因為行為已經被 golden 鎖住，回檔是安全的。
+
+**驗證三層**：
+1. `test/interp-golden-test.ts` —— **特性化 golden**：把 31 個代表性程式的「每一帧 digest」整體雜湊錄下來。
+   重構不該改變任何行為，digest 一變就是搬檔時動到了什麼。要**刻意**改行為時：`UPDATE_GOLDEN=1 node test/interp-golden.mjs` 重錄，並在 commit message 說明為什麼。
+2. 既有 35 個測試檔 —— 語意與渲染（`render-test` / `hkoi-presets-test` 會把所有 preset 的每一幀渲染成 HTML）。
+3. `node_modules/.bin/tsc.cmd --noEmit` —— 目前 31 個既有錯誤（見 §2C），S8 會清掉並納入流程。
+
+| 步驟 | 內容 | 檔案 | 驗證 |
+|---|---|---|---|
+| **S0** | 手冊（本檔）+ 特性化 golden 測試 + 執行計畫 | `ARCHITECTURE.md`, `test/interp-golden-test.ts`, `test/_golden/interp-golden.txt` | `npm test` 全過 |
+| **S1** | 抽出 `interpreter/runtime.ts`：`Runtime` 介面、`RuntimeError`、`Snapshot` / `RunOptions` / `CallNode`、`MAX_STEPS`、`isIntegral` / `truthy` / `defaultScalar` | 新檔 + `interpreter.ts` | golden |
+| **S2** | 抽出 `interpreter/values.ts`：`num` / `coerceTo` / `cmp` / `eq` / `cellOrder` / `valueOrder` / `charCode` / `toStringVal` / `formatDouble` / `parseInputValue` / `scalarCmp` / `assertScalarRV` / `cellScalar` 等**純函式** | 新檔 + `interpreter.ts` | golden |
+| **S3** | 抽出 `interpreter/input.ts`：cin 游標（`readCinToken` / `readCinLine` / `skipInputSpace` / `inadequateInputMsg`）+ `cinReadTargets` + `getline` / `cin.ignore` 的部分 | 新檔 + `interpreter.ts` | golden |
+| **S4** | 抽出 `interpreter/builtins.ts`：`execCall` 裡的**全部內建**（sort / 數學 / stoi / 字串與容器方法 / memset / sizeof / fill…）—— 最大的一塊 | 新檔 + `interpreter.ts` | golden |
+| **S5** | 抽出 `interpreter/stmts.ts`：`execStmt` / `execDecl` / `execBlock` / `execAssign` / `execUpdate` / `resolveTarget`（含 `cin` 陳述式、控制流） | 新檔 + `interpreter.ts` | golden |
+| **S6** | 抽出 `interpreter/calls.ts`：函式呼叫與參數綁定、呼叫樹、`stableSortWithCmp` / `callComparator`；`interpreter.ts` 只剩 `run()` | 新檔 + `interpreter.ts` | golden |
+| **S7** | `App.tsx` 拆出 `usePlayer()`（collect / 播放 / 斷點 / 跳步）/ `Topbar` / `Splitter` / `OutputPane` | 新檔 + `App.tsx` | `npm test` + 手動開 dev |
+| **S8** | `memory.ts` 加 `asSeq()` / `elemTypeOf()` 等窄化工具，清掉 31 個型別錯誤；`package.json` 加 `typecheck` 腳本並在發版流程跑它 | `memory.ts`、各檔、`package.json` | `tsc --noEmit` = 0 |
+| **S9** | 測試樣板抽 `test/_helpers.ts`（`check` / `eq` / `err` / `run1`） | `test/*.ts` | `npm test` 全過 |
+
+做完 S0–S9 再發一個版本（v0.11.0）。中途每一步都可以單獨發版，因為每一步都是完整可用的狀態。
