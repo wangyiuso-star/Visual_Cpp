@@ -1,6 +1,17 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**v0.9.6 —— 讓多個變數／資料結構並排（右側不再一張卡片佔一行）**。
+  - **使用者的原意**（第一次我理解錯了）：不是要單一 2D 陣列變大，而是**讓更多變數卡片並排放在右邊**。
+  - **根因（兩層疊在一起）**：
+    1. `.viz-main` 以前是「寬螢幕寫死兩欄、窄螢幕硬退成單欄」，而 `@media (max-width: 1440px)` 在一般筆電就命中 → **幾乎所有情況都是單欄**：一張卡片一行。
+    2. 而且大部分卡片的形狀被寫死成 `shape-horizontal`（`grid-column: 1 / -1` ＝佔整行）：**一維陣列／vector、字串（string）、set / map / queue / deque、tree / bst / pqueue** 全部都是整行 → 即使有兩欄也會佔滿，右邊永遠空著。
+  - **修法**：
+    1. **網格改成 `repeat(auto-fill, minmax(360px, 1fr))`**（`@media (max-width: 1440px)` 那條也一起改）→ 卡片按可用寬度自動分欄：寬螢幕多欄、拖窄了自然變單欄。容器查詢的單欄門檻由 680px 收到 520px（600~680px 其實放得下兩欄，不該被硬退成單欄）。
+    2. **卡片形狀改成「預設一欄」**（`shapeClass`）：只有真的需要橫向空間的才佔整行 —— **樹 / BST / 堆**（橫向層級佈局）與**很寬的二維表**（行長 > 12，例如 501 列的 DP 表）。一維陣列、字串、set/map、queue/deque、stack、pair 全部變成單欄，可以並排。
+    3. **讓單欄卡片不會被擠爆**：新增 `useFit()`（量卡片實際寬度，`offsetWidth` 與容器 `clientWidth` 同一座標系、不受卡片 zoom 影響），`Windowed1D` / `Windowed2D` / `StructArrayView` 的**視窗欄數改成跟著寬度走**（一維 10~40 格、二維 5~26 欄，行數 ≈ 0.7 倍、5~12 行）。以前寫死「一行 5／10 格」，窄卡片就會把陣列擠成兩行 —— 那正是上一輪被迫退成單欄的原因。
+  - 註：寬的 DP 表「變大」只是副作用（拿到整行 + 自適應視窗會多顯示幾欄）；使用者的主訴求由「形狀 + 網格」解決。
+  - 測試：`test/render-test.ts` 補 6 項，**用真的 DOM 渲染斷言卡片形狀**：寬 2D（20 列）→ `shape-horizontal`、一維陣列／pair／字串 → `shape-square`、樹 → `shape-horizontal`；再加 CSS 必須是 auto-fill ×2、`useFit` 必須存在。⚠️ 踩坑：測試裡的 `cardOf(name)` 正則要錨在 `</span>NAME<span`（caret 之後緊跟變數名），否則單字母變數名（`s`）會誤判到第一張卡片。35 個測試檔全過。
 - 2026-08-17：**v0.9.5 —— 編輯器 Tab 縮排改成 4 格（可切回 2）+ 整行加減縮排的快捷鍵**。
   - **起因**：使用者說「Windows 上預設 Tab = 4 個空格，我們專案裡只有 2 個；能不能改預設 4？另外有什麽快捷鍵能一鍵加/減 Tab？」
   - **根因**：CodeMirror 的 `indentUnit` facet **預設就是 2 個空格**（`@codemirror/language`），而 `@uiw/react-codemirror` 又預設掛了 `indentWithTab`（Tab→`indentMore`、Shift-Tab→`indentLess`），所以 Tab 一直只縮 2 格。

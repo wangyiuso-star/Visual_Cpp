@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { parse } from '../src/interpreter/parser'
@@ -232,6 +233,47 @@ for (const p of PRESETS) {
     check('图的 svg 带 viewBox（放大时才缩得进卡片）', !!m, h.slice(Math.max(0, h.indexOf('graph-svg') - 20), h.indexOf('graph-svg') + 120))
     if (m) check('viewBox 与 width/height 一致', m[3] === '0 0 ' + m[1] + ' ' + m[2], m[3] + ' vs ' + m[1] + 'x' + m[2])
   }
+}
+// ---------- 卡片并排（v0.9.6）：多张卡片并排 ----------
+// 起因：使用者说「让更多变量可以放在右边并列」——以前窄屏直接退成单列，而且大部分卡片
+// （一维数组/字串/set/map…）都写死占整行，结果一张卡片一行、右边永远空着。
+// 现在：网格 auto-fill 自动分栏 + 预设每张卡片只占一栏，只有树/堆与很宽的二维表才占整行。
+{
+  const src = [
+    '#include <bits/stdc++.h>',
+    'using namespace std;',
+    'int main(){',
+    '  vector<vector<int>> memo(20, vector<int>(20, -1));',
+    '  vector<int> small3 = {1,2,3};',
+    '  pair<int,int> pt = make_pair(1,2);',
+    '  string s = "hi";',
+    '  tree<int> t(3); t[1]=1; t[2]=2; t[3]=3;',
+    '  int x = 5;',
+    '  cout << memo[0][0] << small3[0] << pt.first << s << t[1] << x;',
+    '  return 0;',
+    '}',
+    '',
+  ].join('\n')
+  let last: any = null
+  try { for (const s of run(parse(src), {})) last = s } catch (e) { check('并排测试可执行', false, (e as Error).message) }
+  let h = ''
+  try { h = renderToStaticMarkup(createElement(VariablesPanel, { snapshot: last })) } catch (e) { check('并排测试可渲染', false, (e as Error).message) }
+  // 卡片外层的 class 形如 class="var shape-horizontal"，用它判断占几栏。
+  // 名字要锚在 </span>NAME<span（caret 之后紧跟变量名），不然单字母名字（s）会误判到别的卡片。
+  const cardOf = (name: string) => {
+    const m = new RegExp('class="var ([a-z-]+)"[\\s\\S]{0,300}?</span>' + name + '<span').exec(h)
+    return m ? m[1] : ''
+  }
+  check('宽的二维表（20 列）占整行', cardOf('memo') === 'shape-horizontal', cardOf('memo'))
+  check('一维数组只占一栏（可以跟别的卡片并排）', cardOf('small3') === 'shape-square', cardOf('small3'))
+  check('pair 只占一栏', cardOf('pt') === 'shape-square', cardOf('pt'))
+  check('字串只占一栏（以前占整行，右边全空）', cardOf('s') === 'shape-square', cardOf('s'))
+  check('树仍然占整行（横向层级布局需要宽度）', cardOf('t') === 'shape-horizontal', cardOf('t'))
+  check('四张一栏的卡片 + 两张整行，等于并排而不是一人一行', [cardOf('small3'), cardOf('pt'), cardOf('s')].every((x) => x === 'shape-square'))
+  const css = readFileSync('src/index.css', 'utf8')
+  check('网格用 auto-fill 自动并排（不是写死两列/单列）', /grid-template-columns:\s*repeat\(auto-fill/.test(css))
+  check('窄屏也是 auto-fill（不再硬退成单列）', (css.match(/grid-template-columns:\s*repeat\(auto-fill/g) || []).length >= 2)
+  check('卡片的自适应窗口会量宽度（useFit）', /function useFit/.test(readFileSync('src/components/VariablesPanel.tsx', 'utf8')))
 }
 console.log('-'.repeat(88))
 console.log('==== render-test: ' + pass + ' 通过, ' + fail + ' 失败 ====')

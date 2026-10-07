@@ -84,6 +84,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.9.4 —— 大表格/長容器不再讓面板卡死
 - [x] 編輯器 Tab 縮排改 4 格 + 加減縮排快捷鍵 —— 已做（根因：CodeMirror 的 `indentUnit` 預設 2 格。新增 `src/components/editorSetup.ts`：DEFAULT_INDENT_SIZE=4、`editorIndentExtensions(size)`（indentUnit + tabSize + Tab/Shift-Tab/**Ctrl+]**/**Ctrl+[** → indentMore/indentLess）、CodeEditor 用 Compartment 動態重設、App 在「設置」選單可切 2/4 格並存 localStorage；test/editor-setup-test.ts 19 項含契約測試）
 - [x] 发布 v0.9.5 —— Tab 縮排 4 格 + 加減縮排快捷鍵
+- [x] 多個變數並排（右側不再一張卡片一行）—— 已做（根因：`.viz-main` 在 ≤1440px 硬退成單欄 + 大部分卡片形狀寫死 `shape-horizontal`＝佔整行（一維陣列/字串/set/map/queue/deque 全都是）。修法：網格改 `repeat(auto-fill, minmax(360px,1fr))`、`shapeClass` 改成**預設一欄**（只有樹/堆/BST 與行長 > 12 的寬二維表佔整行）、新增 `useFit()` 讓 1D/2D/struct 視窗欄數跟著卡片寬度走（以前寫死 5/10 格，窄卡片會把陣列擠成兩行）。render-test +6 用 DOM 斷言卡片形狀）
+- [x] 发布 v0.9.6 —— 多个变量卡片并排
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

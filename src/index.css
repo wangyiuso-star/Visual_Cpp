@@ -272,7 +272,9 @@ body {
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 卡片按可用宽度自动并排：宽屏幕多放几张、窄了自然退成一张一行。
+     （以前写死两列，之后又在窄屏改成单列，结果宽卡片右边永远是空的。） */
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 12px;
   align-items: start;
 }
@@ -569,7 +571,7 @@ body {
   .btn { padding: 6px 11px; font-size: 12px; }
   .viz-body { padding: 12px; }
   .viz-split { gap: 12px; }
-  .viz-main { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .viz-main { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; }
   .var { margin-bottom: 14px; }
   .cell { min-width: 30px; min-height: 30px; padding: 4px 7px; font-size: 12px; }
   .cell.scalar { min-width: 56px; }
@@ -595,8 +597,9 @@ body {
   .scalar-var .sv-name { font-size: 10px; }
   .scalar-var .sv-value { font-size: 13px; }
 }
-/* 右侧面板被手动拖窄时同样退化为单列（容器查询，浏览器支持时生效） */
-@container (max-width: 680px) {
+/* 面板被拖到真的很窄（放不下两栏）时才退成单列。
+   门槛从 680 收到 520：600~680px 其实放得下两栏（auto-fill 会自己算），不该被硬退成单列。 */
+@container (max-width: 520px) {
   .viz-main { grid-template-columns: minmax(0, 1fr); }
 }
 
