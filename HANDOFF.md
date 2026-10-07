@@ -1,6 +1,15 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**v0.9.5 —— 編輯器 Tab 縮排改成 4 格（可切回 2）+ 整行加減縮排的快捷鍵**。
+  - **起因**：使用者說「Windows 上預設 Tab = 4 個空格，我們專案裡只有 2 個；能不能改預設 4？另外有什麽快捷鍵能一鍵加/減 Tab？」
+  - **根因**：CodeMirror 的 `indentUnit` facet **預設就是 2 個空格**（`@codemirror/language`），而 `@uiw/react-codemirror` 又預設掛了 `indentWithTab`（Tab→`indentMore`、Shift-Tab→`indentLess`），所以 Tab 一直只縮 2 格。
+  - **修法**：新增 `src/components/editorSetup.ts`（**抽出來才測得動**：node 端建 `EditorState` 就能驗 facet 與快捷鍵，不需要真 DOM）：
+    - `DEFAULT_INDENT_SIZE = 4`、`INDENT_SIZES = [2, 4]`、`indentUnitOf()`、`normalizeIndentSize()`（亂值一律回 4）。
+    - `editorIndentExtensions(size)` = `indentUnit.of(' '.repeat(size))` + `EditorState.tabSize.of(size)` + 快捷鍵：**Tab→`indentMore`、Shift-Tab→`indentLess`、`Mod-]`/`Mod-[`（Ctrl+] / Ctrl+[）** 各一組。後兩組是 VS Code / Sublime 的寫法，**不用先選取整行**，游標在那一行按一下就能加/減一層；選取多行時整批處理。
+    - `CodeEditor` 用 **`Compartment`** 動態重設這一小塊 extension（改設定不必重建編輯器、不會丟 undo 歷史），並新增 `indentSize` prop。
+    - `App` 新增狀態 + `localStorage['cpp-viz-indent-size']` 記憶，並在「設置 ▾」選單加一區「編輯器：Tab 縮排 [2 格][4 格]」與一行說明「整行加减缩排：Tab / Shift-Tab，或 Ctrl+] / Ctrl+["（順手讓功能被發現）。
+  - 測試：新增 `test/editor-setup-test.ts`（**19 項**）——預設 4 格、換算、**真的建 `EditorState` 驗 `indentUnit` = 4 個空格與 `tabSize` = 4**、切成 2 時是 2 格、四組快捷鍵各自綁到 `indentMore`/`indentLess`，以及**接線的契約測試**（App 必須把 `indentSize` 傳給 CodeEditor、選單要有選項、要記進 localStorage、CodeEditor 要用 Compartment 重設）。35 個測試檔全過。
 - 2026-08-17：**v0.9.4 —— 修「501×501 的 DP 表讓畫面卡死」**（使用者：那段 `make_same` 程式「卡死在第 4 步」）。
   - **重現並量化**：解釋器本身完全沒問題（99 幀、10ms 跑完）。**卡死的是右側面板的渲染**：`vector<vector<int>> memo(501, vector<int>(501,-1))` 在面板裡走「鄰接表 → 圖」這條路，501 行 × 每行 501 個鄰居 = **251k 條邊** → 卡片要產生 251k 個 `<line>`。實測那一幀產出 **40.8MB 的 HTML**、node 端渲染一次要 **2.9~4.5 秒**（瀏覽器再加上 layout 與 paint 就是整個分頁卡死）。使用者說的「第 4 步」＝ `memo` 第一次出現在畫面上的那一幀（我的實測是 step 5，同一件事）。**不是死循環、也不是解釋器慢。**
   - **修法（三層）**：

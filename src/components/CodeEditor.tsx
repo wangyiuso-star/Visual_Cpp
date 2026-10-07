@@ -4,7 +4,8 @@ import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { cpp } from '@codemirror/lang-cpp'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView, Decoration, DecorationSet, gutter, GutterMarker, lineNumbers } from '@codemirror/view'
-import { StateField, StateEffect, RangeSet, RangeSetBuilder } from '@codemirror/state'
+import { Compartment, StateField, StateEffect, RangeSet, RangeSetBuilder } from '@codemirror/state'
+import { editorIndentExtensions, normalizeIndentSize } from './editorSetup'
 
 const setActiveLine = StateEffect.define<number>()
 
@@ -75,10 +76,20 @@ interface Props {
   activeLine: number
   breakpoints: Set<number>
   onToggleBreakpoint: (line: number) => void
+  // Tab 缩排几个空格（2 或 4）。预设 4，见 editorSetup.ts。
+  indentSize: number
 }
 
-export default function CodeEditor({ value, onChange, activeLine, breakpoints, onToggleBreakpoint }: Props) {
+export default function CodeEditor({
+  value,
+  onChange,
+  activeLine,
+  breakpoints,
+  onToggleBreakpoint,
+  indentSize,
+}: Props) {
   const ref = useRef<ReactCodeMirrorRef>(null)
+  const indentCompartment = useMemo(() => new Compartment(), [])
   const onToggleRef = useRef(onToggleBreakpoint)
   useEffect(() => {
     onToggleRef.current = onToggleBreakpoint
@@ -99,8 +110,16 @@ export default function CodeEditor({ value, onChange, activeLine, breakpoints, o
         },
       },
     })
-    return [cpp(), activeLineField, breakpointField, breakpointGutter, lineNumbers()]
+    return [cpp(), activeLineField, breakpointField, breakpointGutter, lineNumbers(), indentCompartment.of(editorIndentExtensions(indentSize))]
+    // indentSize 用 Compartment 动态重设（见下面的 useEffect），所以这里不需要进依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 缩排设定改了：就地重设那一小块 extension（不用重建整个编辑器，也不会丢 undo 历史）
+  useEffect(() => {
+    const view = ref.current?.view
+    if (view) view.dispatch({ effects: indentCompartment.reconfigure(editorIndentExtensions(normalizeIndentSize(indentSize))) })
+  }, [indentSize, indentCompartment])
 
   useEffect(() => {
     const view = ref.current?.view

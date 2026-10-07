@@ -82,6 +82,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.9.3 —— 第二／三優先複查 + 関数多載靜默錯誤修正
 - [x] 501×501 的 DP 表讓畫面卡死 —— 已做（**根因不在解釋器**（99 幀 10ms 跑完），而是面板把 `vector<vector<int>>` 當成鄰接表畫圖：501 節點、251k 條邊 → 40.8MB 的 HTML、node 端渲染 2.9~4.5 秒、瀏覽器卡死。修法：新增 `graphLimit.ts` **畫圖前檢查規模**（節點 ≤80、邊 ≤800，超過改顯示說明）+ `AdjListView` 預設走表格 + **stack/queue/deque/set/map 五個逐項視圖補上 `VIEW_MAX_ITEMS = 300` 截斷與「还有 N 项未显示」**。效果 40.8MB → 5.5KB。test/render-limit-test.ts 12 項用「HTML 大小」當卡死門檻）
 - [x] 发布 v0.9.4 —— 大表格/長容器不再讓面板卡死
+- [x] 編輯器 Tab 縮排改 4 格 + 加減縮排快捷鍵 —— 已做（根因：CodeMirror 的 `indentUnit` 預設 2 格。新增 `src/components/editorSetup.ts`：DEFAULT_INDENT_SIZE=4、`editorIndentExtensions(size)`（indentUnit + tabSize + Tab/Shift-Tab/**Ctrl+]**/**Ctrl+[** → indentMore/indentLess）、CodeEditor 用 Compartment 動態重設、App 在「設置」選單可切 2/4 格並存 localStorage；test/editor-setup-test.ts 19 項含契約測試）
+- [x] 发布 v0.9.5 —— Tab 縮排 4 格 + 加減縮排快捷鍵
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

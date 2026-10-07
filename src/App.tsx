@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import CodeEditor from './components/CodeEditor'
 import VariablesPanel from './components/VariablesPanel'
 import ErrorBoundary from './components/ErrorBoundary'
+import { DEFAULT_INDENT_SIZE, INDENT_SIZES, normalizeIndentSize } from './components/editorSetup'
 import { parse } from './interpreter/parser'
 import { run } from './interpreter/interpreter'
 import type { Snapshot } from './interpreter/interpreter'
@@ -31,6 +32,14 @@ export default function App() {
   const [editorPct, setEditorPct] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 1500 ? 50 : 55))
   const [dragging, setDragging] = useState(false)
   const [boolAsInt, setBoolAsInt] = useState(false)
+  // Tab 缩排几个空格（预设 4，见 editorSetup.ts）。这是编辑器设定，不用让快照失效。
+  const [indentSize, setIndentSize] = useState<number>(() => {
+    try {
+      return normalizeIndentSize(localStorage.getItem('cpp-viz-indent-size'))
+    } catch {
+      return DEFAULT_INDENT_SIZE
+    }
+  })
   const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set())
   const [input, setInput] = useState('')
   const [codePct, setCodePct] = useState(48)
@@ -146,6 +155,16 @@ export default function App() {
     setSnapshots(null)
     setIndex(-1)
     setPlaying(false)
+  }
+
+  function changeIndentSize(size: number) {
+    const n = normalizeIndentSize(size)
+    setIndentSize(n)
+    try {
+      localStorage.setItem('cpp-viz-indent-size', String(n))
+    } catch {
+      // 无痕模式：存不了也没关系
+    }
   }
 
   function changeBoolAsInt(val: boolean) {
@@ -376,6 +395,23 @@ export default function App() {
                 <input type="checkbox" checked={boolAsInt} onChange={(e) => changeBoolAsInt(e.target.checked)} />
                 bool 输出 1/0
               </label>
+              <div className="cond-menu-hint">编辑器</div>
+              <div className="indent-choice">
+                <span>Tab 缩排</span>
+                {INDENT_SIZES.map((s) => (
+                  <button
+                    key={s}
+                    className={indentSize === s ? 'on' : ''}
+                    onClick={() => changeIndentSize(s)}
+                    title={'按 Tab 缩排 ' + s + ' 格'}
+                  >
+                    {s} 格
+                  </button>
+                ))}
+              </div>
+              <div className="cond-menu-note">
+                整行加减缩排：Tab / Shift-Tab，或 Ctrl+] / Ctrl+[
+              </div>
             </div>
           )}
         </div>
@@ -408,7 +444,14 @@ export default function App() {
           <div className="pane-title">代码编辑器 · C++</div>
           <div className="left-body" ref={leftBodyRef}>
             <div className="editor-body" style={{ height: availH * codePct / 100 }}>
-              <CodeEditor value={code} onChange={onCodeChange} activeLine={activeLine} breakpoints={breakpoints} onToggleBreakpoint={toggleBreakpoint} />
+              <CodeEditor
+            value={code}
+            onChange={onCodeChange}
+            activeLine={activeLine}
+            breakpoints={breakpoints}
+            onToggleBreakpoint={toggleBreakpoint}
+            indentSize={indentSize}
+          />
             </div>
             <div className="divider-h" onMouseDown={onCinDividerMouseDown} title="拖动调整代码框高度" />
             <div className="cin-pane" style={{ height: availH * cinPct / 100 }}>
