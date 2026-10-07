@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { parse } from '../src/interpreter/parser'
@@ -10,13 +11,6 @@ import VariablesPanel from '../src/components/VariablesPanel'
 //    原本寫成 presets/ 讓這個測試從加入起就一直被 SKIP，等於從來沒驗證過課程 preset。
 import { PRESETS } from '../../HKOI_teaching/VisualCode-preset/presets'
 
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 const marks = ['class="cell', 'graph-svg', 'tree-node-wrap', 'call-label', 'viz-empty', 'stack-marker', 'queue-marker', 'scalar-var']
 
 // 从渲染出的 HTML 取「同屏可见的变量名」：容器卡片是 .var-name（caret span 之后那段），
@@ -165,5 +159,4 @@ for (const nm of ['选择排序', '冒泡排序', '插入排序']) {
     i ? JSON.stringify(String(i.snaps[i.snaps.length - 1].output)) : '')
 }
 
-console.log('==== hkoi-presets-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('hkoi-presets-test')

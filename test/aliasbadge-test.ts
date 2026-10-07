@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { parse } from '../src/interpreter/parser'
@@ -7,14 +8,6 @@ import VariablesPanel from '../src/components/VariablesPanel'
 // 鎖住兩件事：
 //  (1) 引用/陣列形參的卡片要有「參數（別名）」徽章
 //  (2) 寫入高亮**維持原樣**——只亮被指向的那個名字（決策 ①b：不改高亮）
-
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 
 function render(s: any) { return renderToStaticMarkup(createElement(VariablesPanel, { snapshot: s })) }
 
@@ -135,5 +128,4 @@ function insideSnap(code: string, marker: string) {
   check('同一帧裡參數 v 仍有徽章', !!v && v.hasAlias, JSON.stringify(cs))
 }
 
-console.log('==== aliasbadge-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('aliasbadge-test')

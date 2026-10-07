@@ -33,6 +33,10 @@
     5. 零星：`parser.ts` 的 `arraySizes` 型別是 `(Expr | undefined)[]`；CodeMirror gutter 的 `domEventHandlers` 事件是寬鬆 `Event`，要自己收窄成 `MouseEvent`。
     - **順手的行為修正（不是純型別）**：①以前對 set/stack/queue/pair/struct 取下标會變成 `undefined.length` 崩潰（使用者看到的是 `Cannot read properties of undefined`）→ 現在是明確的 **`不能对 set 取下标`**；②`int a[] = x`（省略大小卻沒有初始化列表）以前也是存取 `undefined.items` → 現在是「省略数组大小时必须提供初始化列表」。兩者都補進 `test/compat-test.ts`（+5 條，現 69 項）。
     - **驗證**：`npm run typecheck` **0 錯誤**、`npm test` **37/37**（含 31 個 golden 案例 —— 顯示 digest 一字不差，證明型別修正沒有動到行為）、`npm run build` ✅。
+  - **S9（重構最後一步）**：新增 **`test/_helpers.ts`（73 行）** —— 測試共用樣板 `check` / `eq` / `run1` / `out` / `err` / `report` + `stats` 計數。檔名以 `_` 開頭，`scripts/run-tests.mjs` 會忽略（並在輸出裡列出「（忽略 1 個 _ 前綴檔案：_helpers.ts）」），但仍可被 import；每個測試檔是**獨立 node 行程**，所以共用計數器不會跨檔累加。
+    - **已遷移 9 個樣板一字不差的檔**（aliasbadge / appshell / crash / editor-setup / hkoi-presets / panellayout / render / render-limit / summary）：開頭 `import { check, report } from './_helpers'`、結尾 `report('<name>')`，每個檔少掉那 15 行重複。
+    - **其餘 28 個刻意不動**：它們的自訂 harness 簽章與語意各不相同（`eq` 至少三種、`err` 兩種比對位置、`run1` 三種回傳形狀），逐檔換要一個一個對呼叫端 —— 屬於後續可選工作，已記在 `ARCHITECTURE.md` §2D。
+    - **驗證**：`npm test` 37/37、`npm run typecheck` 0 ✅。
 - 2026-08-17：**v0.10.0 —— 解耦重構（第一批）：`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/` 五個模組，並去掉一份複製**。
   - **起因**：使用者問「整個專案有沒有需要對/解耦的地方？方便後續更新」。
   - **盤點**（寫進新增的 `ARCHITECTURE.md`）：`interpreter.ts` **2930** / `parser.ts` 1019 / `index.css` 715 / `App.tsx` 493（**單一 480 行元件**）/ `VariablesPanel.tsx` 1983。

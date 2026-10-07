@@ -18,6 +18,7 @@
 | `src/components/viz/window.tsx` | 334 | 一維／二維／struct 矩陣視窗 + 共用的 `useWindowOffset` |
 | `src/components/viz/containers.tsx` | 310 | string / stack / queue / deque / set / map / struct / pair 檢視 |
 | `src/interpreter/interpreter.ts` | **113** | 只剩 `run()`（公開入口）+ 公開型別轉出（`Snapshot` / `CallNode` / `RunOptions` / `RuntimeError`）—— 從 2930 行一路降到這裡 |
+| `test/_helpers.ts` | 73 | 測試共用樣板（`check` / `eq` / `err` / `run1` / `report`）—— S9 新增，不算測試檔 |
 | 其他 | ~930 | lexer(348) / memory(193) / snapshot(159) / ast(121) / runtime(118) / cells(77) / input(53) / CodeEditor / panelLayout / editorSetup / graphLimit / ErrorBoundary / presets |
 
 ### v0.10.0 做了什麼
@@ -69,8 +70,12 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 
 現在 `npm run typecheck`（= `tsc --noEmit`）是 **0 錯誤**，`npm run verify` 會依序跑 typecheck → test → build。
 
-### (D) 測試檔的樣板重複
-每個 `test/*.test.ts` 都自己重寫一次 `pass/fail/check/eq/err`（每個約 15 行 × 35 個檔）。可以抽到 `test/_helpers.ts`（底線開頭，`scripts/run-tests.mjs` 不會把它當成測試檔，但仍可被 import）。價值中等、風險接近零。
+### (D) 測試檔的樣板重複 —— **第一批已做（S9）**
+`test/_helpers.ts`（73 行，底線開頭所以 `run-tests.mjs` 不把它當測試檔）提供 `check` / `eq` / `run1` / `out` / `err` / `report`，並用 `stats` 計數。每個測試檔都是**獨立的 node 行程**，所以共用計數器不會跨檔累加。
+
+**已遷移 9 個**（它們的樣板本來就一字不差：`let pass/fail` + `check` + 同樣的結尾）：aliasbadge / appshell / crash / editor-setup / hkoi-presets / panellayout / render / render-limit / summary —— 每個檔開頭換成 `import { check, report } from './_helpers'`、結尾換成 `report('<name>')`。
+
+**還沒遷移的**（其餘 28 個）：它們各自有**不同簽章與語意**的自訂迷你 harness —— `eq` 至少三種（`(name, code, want)` 跑程式比輸出 / `(actual, expected, name)` 比字串 / `(name, code, want, input)`）、`err` 兩種（比對訊息片段的第二個參數位置不同）、`run1` 回傳形狀也不同（`Snapshot` / `{out, err, snaps}`）。逐檔換要一個一個對呼叫端，屬於後續可選工作，不影響正確性。
 
 ### (E) `index.css` 715 行
 暫時不建議拆：CSS 拆檔只會多出 import 順序的坑（這份檔案有幾處是刻意靠「後面的規則覆蓋前面的」在運作的，例如 `.card-wide` 蓋 `.var`）。等它超過 ~1000 行或出現主題切換需求再說。
@@ -104,6 +109,6 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 | **S6** ✅ | 抽出 `interpreter/core.ts`（826 行）：`sizeofOperand` / `applyStructInit` / `resolveTarget` / `evalExpr` / `execAssign` / `execUpdate` / `execCall` / `execMethodCall` / `execDecl` / `execBlock` / `cinReadTargets` / `execStmt`（**求值 + 敘述 + 呼叫同檔**，理由見 §2A）。`interpreter.ts` 933 → **113 行**，只剩 `run()` + 型別轉出 | 新檔 + `interpreter.ts` | golden ✅（31 檔全過、`tsc` 仍 31） |
 | **S7** ✅ | `App.tsx` 493 → 206 行：`usePlayer.ts`（187）/ `Topbar.tsx`（150）/ `Splitter.tsx`（100）/ `OutputPane.tsx`（31，含純函式 `outputView`）。新增 `test/appshell-test.ts`（23 項，含整個 `<App/>` 的 SSR 渲染煙霧測試） | 4 新檔 + `App.tsx` | 37 檔全過 ✅ + tsc 仍 31 + dev server 五個新模組都 200 |
 | **S8** ✅ | `memory.ts` 加 `asIndexable()` / `elemTypeOf()`、`ast.ts` 加 `AssignExpr` / `UpdateExpr`，清掉**全部 31 個**型別錯誤（做法見 §2C）；`package.json` 加 `verify`（typecheck + test + build）。順手把「不能下標的容器」從 undefined 崩潰改成明確 RuntimeError，並補 5 條 `compat-test` 斷言 | `memory.ts` / `ast.ts` / `core.ts` / `builtins.ts` / `cells.ts` / `parser.ts` / `viz/*` / `VariablesPanel.tsx` / `CodeEditor.tsx` / `package.json` | `npm run typecheck` = 0 ✅ + 37 檔全過 ✅ |
-| **S9** | 測試樣板抽 `test/_helpers.ts`（`check` / `eq` / `err` / `run1`） | `test/*.ts` | `npm test` 全過 |
+| **S9** ✅ | 新增 `test/_helpers.ts`（`check` / `eq` / `run1` / `out` / `err` / `report`），把**樣板一字不差的 9 個測試檔**遷移過去（其餘 28 個的自訂 harness 簽章不一，列為後續可選，見 §2D） | `test/_helpers.ts` + 9 個測試檔 | 37 檔全過 ✅ + `npm run typecheck` 0 ✅ |
 
 做完 S0–S9 再發一個版本（v0.11.0）。中途每一步都可以單獨發版，因為每一步都是完整可用的狀態。

@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -7,14 +8,6 @@ import ErrorBoundary, { CrashCard, describeCrash } from '../src/components/Error
 // 也不知道要回报什么。ErrorBoundary + CrashCard 把这种错误变成看得懂的一则讯息。
 // 注：React 的 SSR（renderToStaticMarkup）不支援 error boundary，所以「接住」这一步在 node 端测不到，
 //     这里测的是替代画面本身、讯息文字，以及「App 真的有把面板包起来」。
-
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 
 // ---------- 讯息 ----------
 const c1 = describeCrash(new Error('boom'))
@@ -48,5 +41,4 @@ check('VariablesPanel 被 ErrorBoundary 包住', wrap)
 const panel = readFileSync('src/components/VariablesPanel.tsx', 'utf8')
 check('面板读 localStorage 有 try/catch 守衛（隐私模式下连读都会抛）', /function readStoredLayout[\s\S]{0,200}catch/.test(panel))
 
-console.log('==== crash-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('crash-test')

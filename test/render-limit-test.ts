@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -11,14 +12,6 @@ import { GRAPH_MAX_EDGES, GRAPH_MAX_NODES, graphTooBigReason } from '../src/comp
 // 它走「邻接表 → 图」这条路，被当成 501 个节点、251k 条边的完全图，
 // 卡片一口气渲染 251k 个 <line>：实测 40MB 的 HTML、node 端一次渲染 3~4 秒，浏览器直接卡死。
 // 所以这里用「渲染出来的 HTML 大小」当门槛 —— 卡死必然先表现为 HTML 爆掉。
-
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 
 // ---------- 规模判断（纯函式）----------
 check('小图可以画', graphTooBigReason(4, 4) === null)
@@ -95,5 +88,4 @@ check('501×501 的 DP 表会说明原因', (graphTooBigReason(501, 501 * 501) ?
   check('两个矩阵视窗共用 useWindowOffset（没有再复制一份）', (windowSrc.match(/useWindowOffset\(rows, maxCols, focus/g) || []).length === 2)
 }
 
-console.log('==== render-limit-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('render-limit-test')

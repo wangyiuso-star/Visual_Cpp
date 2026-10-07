@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -10,14 +11,6 @@ import VariablesPanel from '../src/components/VariablesPanel'
 // presets-test 只断言输出，这里断言「画得出东西且不崩」——能抓到输出对但画面爆掉的 bug
 //（例如历史上 struct 进容器导致的黑屏：row.cells.length on undefined）。
 // 这是 DOM 级验证，不是像素级；像素需要真浏览器。
-
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 
 // 每个 preset 至少应在某一帧渲染出的标记
 const expect: Record<string, string[]> = {
@@ -283,5 +276,4 @@ for (const p of PRESETS) {
   check('isWide 接受 auto 参数（手动选择优先）', /function isWide\(layout: CardLayout, key: string, auto = false\)/.test(layoutSrc))
 }
 console.log('-'.repeat(88))
-console.log('==== render-test: ' + pass + ' 通过, ' + fail + ' 失败 ====')
-if (fail > 0) process.exit(1)
+report('render-test')

@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import {
   EMPTY_LAYOUT,
   TREE_PACK_MIN,
@@ -15,13 +16,6 @@ import {
 // 右侧面板的卡片布局：顺序 / 单卡缩放 / 全宽。
 // 拖动与 localStorage 要真浏览器才能测，所以这里把「顺序怎么算、缩放怎么夹、存档怎么读」逐条锁住。
 
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 function eqArr(name: string, got: string[], want: string[]) {
   check(name, JSON.stringify(got) === JSON.stringify(want), '期望 ' + JSON.stringify(want) + ' 实际 ' + JSON.stringify(got))
 }
@@ -76,5 +70,4 @@ check('序列化 → 读取 是一圈（round trip）', (() => {
   return back.order.join(',') === 'x,y' && back.zoom.x === 1.3 && back.wide.y === true
 })())
 
-console.log('==== panellayout-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('panellayout-test')

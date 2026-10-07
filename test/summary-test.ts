@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { parse } from '../src/interpreter/parser'
 import { run } from '../src/interpreter/interpreter'
 import { PRESETS } from '../src/presets'
@@ -7,14 +8,6 @@ import { formatCellShort } from '../src/components/viz/format'
 // 容器当值时的「一行摘要」：set 元素、map 的键/值、struct 成员、pair 成员、
 // stack/queue/deque 的元素……这裡以前一律显示 '?'（使用者回报：map 的值是 vector 时画面上是 '?'）。
 // 现在一律走 formatCellShort 的递归摘要，这个档案把每种容器都锁住。
-
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 
 // 跑一段程序，取回指定变数的 cell
 function cellOf(pre: string[], body: string[], name: string): any {
@@ -97,5 +90,4 @@ check('pair 里放容器', formatCellShort(pairOf(sc(1), vec([sc(2)]))) === '(1,
   check('preset 里 ' + n + ' 格容器都不会被画成 ?', bad === '', bad)
 }
 
-console.log('==== summary-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('summary-test')

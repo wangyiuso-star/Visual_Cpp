@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -9,14 +10,6 @@ import { parse } from '../src/interpreter/parser'
 // S7（App.tsx 拆檔）的驗證：
 //   1. 輸出面板的顯示邏輯是純函式 → 直接斷言所有分支
 //   2. 刻意搬走／搬到別處的東西用原始碼契約鎖住（以前吃過「改了線但沒接上」的虧）
-
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 
 // ---------- outputView：輸出面板要顯示什麼 ----------
 const noErr = { error: null, output: '42\n' } as any
@@ -65,5 +58,4 @@ check('變數面板的圖例還在', shellHtml.includes('當前行') || shellHtm
 const appLines = app.split('\n').length
 check('App.tsx 在 260 行以內（拆分前 480 行）', appLines <= 260, String(appLines))
 
-console.log('==== appshell-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('appshell-test')

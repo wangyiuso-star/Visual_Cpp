@@ -1,3 +1,4 @@
+import { check, report } from './_helpers'
 import { readFileSync } from 'node:fs'
 import { EditorState } from '@codemirror/state'
 import { indentUnit } from '@codemirror/language'
@@ -14,14 +15,6 @@ import {
 // 编辑器缩排设定：Tab 缩排几个空格 + 整行加减缩排的快捷键。
 // 使用者回报「Windows 上 Tab 是 4 格，工具里只有 2 格」→ 预设改成 4（可切回 2）。
 // 这里不需要真 DOM：EditorState 就能检查 facet 与快捷键绑定。
-
-let pass = 0
-let fail = 0
-function check(name: string, cond: boolean, detail = '') {
-  if (cond) { pass++; return }
-  fail++
-  console.log('FAIL ' + name + (detail ? ' | ' + detail : ''))
-}
 
 // ---------- 预设与换算 ----------
 check('预设缩排是 4 格', DEFAULT_INDENT_SIZE === 4, String(DEFAULT_INDENT_SIZE))
@@ -59,5 +52,4 @@ const ed = readFileSync('src/components/CodeEditor.tsx', 'utf8')
 check('CodeEditor 用 Compartment 动态重设缩排（不重建编辑器）', /indentCompartment\.reconfigure/.test(ed))
 check('CodeEditor 真的用了 editorIndentExtensions', /editorIndentExtensions/.test(ed))
 
-console.log('==== editor-setup-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
-if (fail > 0) process.exit(1)
+report('editor-setup-test')
