@@ -5,6 +5,7 @@
   - **S0（`71bd588`）**：手冊（`ARCHITECTURE.md` 補上「執行計畫 S0–S9」）+ **特性化 golden 測試** `test/interp-golden-test.ts` 與 `test/_golden/interp-golden.txt`（31 個代表性程式，把「每一帧 digest」整體雜湊錄下來）。重構不該改變行為 —— digest 一變就是動到了什麼；要刻意改行為時 `UPDATE_GOLDEN=1` 重錄並在 commit 說明。
   - **S1**：抽出 `src/interpreter/runtime.ts`（118 行）—— `Runtime` 介面、`Snapshot` / `CallNode` / `RunOptions`、`RuntimeError`、`RV` / `LValue` / 三個控制流 signal、`Frame`、`MAX_STEPS`、`isIntegral` / `truthy` / `defaultScalar`。`interpreter.ts` 2930 → **2832** 行；對外公開型別仍從 `interpreter.ts` 轉出（App / 面板 / 測試的 import 不用改）。
   - 重構過程中新增的兩個踩坑：①這個檔在磁碟上是 **CRLF**，用腳本切檔時要 `split(/\r?\n/)` 再以 LF 寫回（`git config core.autocrlf=true` 會處理儲存）；②`0-diff` 驗證要看 golden，不要只看 build。
+  - **S2**：抽出 `src/interpreter/values.ts`（634 行）—— 全部**純函式**：數值轉換與比較（`num` / `coerceTo` / `cmp` / `eq` / `charCode`）、容器比較（`cellOrder` / `valueOrder` / `seqOf`…）、運算（`applyBinary` / `numeric` / `combineAssign`）、格式化（`toStringVal` / `formatDouble` / `formatExpr`）、`sizeof` 的位元組計算、`set`/`map`/`heap`/`bst` 的純演算法。`interpreter.ts` 2832 → **2259** 行。**踩坑：`typeBytes`/`cellBytes` 其實需要 `Runtime` 型別（查 struct 成員大小），所以 values.ts 要 `import type { Runtime }`；不補的話 tsc 一次多 4 個錯誤。**
 - 2026-08-17：**v0.10.0 —— 解耦重構（第一批）：`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/` 五個模組，並去掉一份複製**。
   - **起因**：使用者問「整個專案有沒有需要對/解耦的地方？方便後續更新」。
   - **盤點**（寫進新增的 `ARCHITECTURE.md`）：`interpreter.ts` **2930** / `parser.ts` 1019 / `index.css` 715 / `App.tsx` 493（**單一 480 行元件**）/ `VariablesPanel.tsx` 1983。
