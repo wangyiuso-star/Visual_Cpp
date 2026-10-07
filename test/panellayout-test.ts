@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { check, report } from './_helpers'
 import {
   EMPTY_LAYOUT,
   TREE_PACK_MIN,
   isWide,
+  treeAutoWideOf,
   ZOOM_MAX,
   ZOOM_MIN,
   clampZoom,
@@ -69,5 +71,28 @@ check('序列化 → 读取 是一圈（round trip）', (() => {
   const back = loadLayout(serializeLayout(l))
   return back.order.join(',') === 'x,y' && back.zoom.x === 1.3 && back.wide.y === true
 })())
+
+// ---------- 樹 / 呼叫樹什麼時候占整行（v0.11.1 修的「沒辦法並排」）----------
+// 症狀：不管面板多寬，樹 / BST / 堆 / 呼叫樹都占整行。
+// 根因：寬度是量 .viz-body 來的，但「還沒跑」那一帧走的是另一棵沒有掛 ref 的子樹，
+//       舊寫法 useEffect([]) 在那時就看到 ref.current === null 直接 return，
+//       之後也不會再掛 → panelW 永遠 0 → treeAutoWideOf(0) 永遠是「占整行」。
+check('量不到寬度（0）→ 先占整行', treeAutoWideOf(0) === true)
+check('負數（異常測量）→ 占整行', treeAutoWideOf(-5) === true)
+check('門檻下方（799px）→ 占整行', treeAutoWideOf(TREE_PACK_MIN - 1) === true)
+check('剛好到門檻（800px）→ 可以並排', treeAutoWideOf(TREE_PACK_MIN) === false)
+check('夠寬（1600px）→ 可以並排', treeAutoWideOf(1600) === false)
+
+const vpSrc = readFileSync('src/components/VariablesPanel.tsx', 'utf8')
+const refCount = vpSrc.split('ref={panelRef}').length - 1
+check('面板寬度改用 callback ref 量（節點換掉會重新掛 observer）', vpSrc.indexOf('useCallback((el: HTMLDivElement | null)') >= 0 && vpSrc.indexOf('roRef') >= 0)
+check('兩個 .viz-body 分支都掛了 panelRef（少一個就會永遠量不到寬度）', refCount === 2, '實際掛了 ' + refCount + ' 個')
+check('不再用舊寫法（useEffect([]) 裡讀 panelRef.current）', vpSrc.indexOf('const el = panelRef.current') < 0)
+check('VariablesPanel 走 treeAutoWideOf（判斷只有一份）', vpSrc.indexOf('treeAutoWideOf(panelW)') >= 0)
+// v0.9.8 的「面板夠寬才並排」只做了一半：treeAutoWide 算出來了，呼叫端卻傳死的 true
+// （cardView('@calltree', true) / cardView(name, isTreeLike(cell))）→ 樹永遠占整行。
+check('呼叫端真的用了 treeAutoWide（不能傳死的 true）', vpSrc.indexOf("cardView('@calltree', true)") < 0 && vpSrc.indexOf('cardView(item.v.name, isTreeLike(item.v.cell) && treeAutoWide)') >= 0, '仍有人傳死的 true')
+check('樹類卡片是 isTreeLike && treeAutoWide', vpSrc.indexOf('isTreeLike(item.v.cell) && treeAutoWide') >= 0)
+check('呼叫樹卡片用 treeAutoWide', vpSrc.indexOf("cardView('@calltree', treeAutoWide)") >= 0)
 
 report('panellayout-test')

@@ -20,6 +20,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - 构建/运行：一般直接跑即可。**注意政策會變**：2026-08-17 起本會話的檔案政策是 `danger-full-access` 且核准提示已停用 → **不要再傳 `sandbox_permissions`（會被自動拒絕）**；若哪天回到 workspace-write，Vite/rolldown/node/git 這類要 spawn 子程序的指令才需要加 `sandbox_permissions="danger-full-access"`。
   - npm run build（改完必重新构建）
   - npm run dev（后台 job；改完 kill 旧 job 再重启，然后探 http://localhost:5173/ 期待 200）
+  - **需要真的看版面/互動時**：用 headless Chrome + CDP 量 DOM（見 `ARCHITECTURE.md` §3.5，腳本在 `tmp/cdp-probe*.mjs`）。**`--user-data-dir` 一定放 `%TEMP%`，放 repo 裡會讓 Vite watcher EBUSY 崩掉 dev server**（`watch.ignored` 已加 `**/tmp/**`，但仍以放外面為準）。
 - 验证：改后 npm run build 应 exit 0 → 重启 dev → Invoke-WebRequest 探 200。
 - 编辑约定：edit/write 前必须先 read（fs-observation 策略）。tools.write 用 String.raw 保留换行，避免反引号与美元花括号插值冲突。
 - 响应语言：中文。
@@ -94,6 +95,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.10.0 —— 解耦重構第一批 + ARCHITECTURE.md
 - [x] 解耦重構第二批（S0–S9，每步一個 commit，方便回檔）—— 已做：`interpreter.ts` **2930 → 113 行**（拆成 `runtime` / `values` / `input` / `builtins`+`cells` / `snapshot` / `core`，依賴單向無循環）、`App.tsx` **493 → 206 行**（`usePlayer` / `Topbar` / `Splitter` / `OutputPane`）、**`tsc --noEmit` 31 → 0**（`npm run typecheck` 進發版流程，另有 `npm run verify`）、測試樣板抽 `test/_helpers.ts`。整個過程用 **31 個 golden 特性化案例**（每帧 digest 整體雜湊）鎖住行為：`test/interp-golden-test.ts`，要刻意改行為時 `UPDATE_GOLDEN=1` 重錄
 - [x] 发布 v0.11.0 —— 解耦重構第二批（S0–S9）+ 型別債清零 + 手冊 ARCHITECTURE.md
+- [x] 修「數據結構樹 / 遞歸樹沒辦法並排」—— 已做（v0.11.1。**兩個疊起來的 bug**：①v0.9.8 起 `treeAutoWide` 算出來卻沒用，呼叫端傳死的 `true` → 樹永遠佔整行；②面板寬度用 `useEffect([])+ref` 量，但第一帧沒掛 ref → `panelW` 永遠 0。修法：`cardView(..., treeAutoWide)` + **callback ref**（兩條分支都掛）+ 判斷抽成 `treeAutoWideOf()`。用 headless Chrome + CDP 在 2560/1920/1400 三種寬度實際量 DOM 驗證：2560 時遞歸樹與陣列、`pq` 與 `g` 同列；1400（面板 <800）刻意佔整行。契約測試 +11 鎖住這兩個形狀）
 
 ## 下一步
 1. 從待辦裡挑一項（**介面/語言功能**優先：HKOI 第三優先語法、 preset 自帶範例輸入、大圖顯示策略）。

@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { Snapshot } from '../interpreter/interpreter'
 import type { VarView, Cell } from '../interpreter/memory'
 import {
   LAYOUT_STORAGE_KEY,
-  TREE_PACK_MIN,
   ZOOM_STEP,
   clampZoom,
   isWide,
@@ -12,6 +11,7 @@ import {
   moveKeyBy,
   moveKeyTo,
   serializeLayout,
+  treeAutoWideOf,
   zoomOf,
 } from './panelLayout'
 import type { CardLayout } from './panelLayout'
@@ -67,9 +67,15 @@ export default function VariablesPanel({ snapshot }: Props) {
   // 面板宽度：树/调用树这种横向层级布局，只有面板够宽（≥ TREE_PACK_MIN）时才让它跟别的卡片并排。
   // 0 = 还没量到（第一帧 / SSR）→ 当作窄面板，先占整行，量到之后自然会并排。
   const [panelW, setPanelW] = useState(0)
-  const panelRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = panelRef.current
+  const roRef = useRef<ResizeObserver | null>(null)
+  // 這裡刻意用 callback ref，而不是 useEffect([]) + ref：
+  // 「還沒跑」（snapshot === null）時走的是另一棵子樹，舊寫法在那一帧 panelRef.current 是 null
+  // 就直接 return 了 —— 之後跑起來也不會再掛回 observer，panelW 永遠停在 0，
+  // 於是樹 / BST / 堆 / 呼叫樹永遠占整行，看起來就是「沒辦法並排」。
+  // callback ref 在節點被換掉或重新掛載時都會再被呼叫一次，所以兩條分支都量得到寬度。
+  const panelRef = useCallback((el: HTMLDivElement | null) => {
+    roRef.current?.disconnect()
+    roRef.current = null
     if (!el) return
     const measure = () => {
       const w = el.clientWidth
@@ -77,11 +83,10 @@ export default function VariablesPanel({ snapshot }: Props) {
     }
     measure()
     if (typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => ro.disconnect()
+    roRef.current = new ResizeObserver(measure)
+    roRef.current.observe(el)
   }, [])
-  const treeAutoWide = panelW <= 0 || panelW < TREE_PACK_MIN
+  const treeAutoWide = treeAutoWideOf(panelW)
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
   useEffect(() => {
@@ -98,7 +103,8 @@ export default function VariablesPanel({ snapshot }: Props) {
 
   if (!snapshot) {
     return (
-      <div className="viz-body">
+      // 這條分支也一定要掛 panelRef：它是最初一帧的 .viz-body（見上面 callback ref 的說明）
+      <div className="viz-body" ref={panelRef}>
         <div className="viz-empty">
           点击上方「运行」或「单步」开始。<br />
           支持：int / long long / char / bool / string / double 变量、数组、二维数组、vector、
@@ -212,14 +218,14 @@ export default function VariablesPanel({ snapshot }: Props) {
               if (item.kind === 'calltree') {
                 return (
                   <div
-                    className={cardClass('calltree-section', cardView('@calltree', true))}
+                    className={cardClass('calltree-section', cardView('@calltree', treeAutoWide))}
                     key="calltree"
-                    {...cardDragProps(cardView('@calltree', true))}
+                    {...cardDragProps(cardView('@calltree', treeAutoWide))}
                   >
                     <div className="calltree-title" onClick={() => setTreeCollapsed((t) => !t)}>
                       <span className="caret">{treeCollapsed ? '▸' : '▾'}</span>
                       递归树 / 调用树
-                      <CardControls card={cardView('@calltree', true)} onMove={(dir) => moveItem('@calltree', dir)} />
+                      <CardControls card={cardView('@calltree', treeAutoWide)} onMove={(dir) => moveItem('@calltree', dir)} />
                     </div>
                     {!treeCollapsed && <CallTreeGraph root={snapshot.callTree!} activeCallId={snapshot.activeCallId ?? 0} />}
                   </div>
@@ -237,7 +243,7 @@ export default function VariablesPanel({ snapshot }: Props) {
                   onToggle={() => toggleCollapse(item.v.name)}
                   vars={snapshot.vars}
                   onMove={(dir) => moveItem(item.v.name, dir)}
-                  card={cardView(item.v.name, isTreeLike(item.v.cell))}
+                  card={cardView(item.v.name, isTreeLike(item.v.cell) && treeAutoWide)}
                 />
               )
             })}

@@ -32,6 +32,20 @@ export function zoomOf(layout: CardLayout, key: string): number {
 // 使用者随时可以按卡片上的 ⤢/⤡ 手动覆盖（手动选过之后就以手动为准）。
 export const TREE_PACK_MIN = 800
 
+/**
+ * 樹 / 呼叫樹這種「橫向層級佈局」在窄面板時要占整行（半寬會被擠到看不清）。
+ *   panelW >= TREE_PACK_MIN → 可以跟別的卡片並排（回 false）
+ *   panelW <  TREE_PACK_MIN → 占整行（回 true）
+ *   panelW <= 0（還沒量到寬度：第一帧或 SSR）→ 保守地先占整行，量到之後就會自動改成並排。
+ *
+ * 注意：這個「量到寬度」是靠 VariablesPanel 的 callback ref 觀測 .viz-body 得來的；
+ * 以前寫成 useEffect([]) + ref，而「還沒跑」那一帧走的是另一棵沒有掛 ref 的子樹，
+ * 於是 panelW 永遠停在 0 → 樹永遠占整行（使用者回報的「沒辦法並排」）。見該處註解。
+ */
+export function treeAutoWideOf(panelW: number): boolean {
+  return panelW <= 0 || panelW < TREE_PACK_MIN
+}
+
 // 这张卡片要不要占整行：
 //   1. 使用者手动按过 ⤢ / ⤡ → 以手动为准；
 //   2. 没手动过 → 看 auto（树/调用树在窄面板时才占整行）；

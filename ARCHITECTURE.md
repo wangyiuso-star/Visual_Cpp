@@ -86,6 +86,7 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 2. **契約測試**（讀原始碼斷言結構）用在「node 端測不到但很容易改壞」的地方：ErrorBoundary 是否包住面板、面板讀 localStorage 是否有 try/catch、2D 視窗是否固定 5×5、兩個矩陣視窗是否共用 `useWindowOffset`。
 3. **渲染層測試是搬檔案的安全網**：`render-test` / `hkoi-presets-test` / `render-limit-test` 會把所有 preset 的每一幀渲染成 HTML，搬家後跑 `npm test` 就知道有沒有漏東西。
 4. **手動跑單一測試一定要先重新打包**：`rolldown test/x.ts -o test/x.mjs -f esm -p node` 再 `node test/x.mjs`，否則看的是舊 bundle（這個坑踩過兩次）。
+5. **佈局這種 node 端測不到的行為，就真的開瀏覽器量**（v0.11.1 用這招抓到「樹不能並排」）：`tmp/cdp-probe*.mjs` = headless Chrome（`--headless=new --remote-debugging-port=9333 --remote-allow-origins=*`）+ CDP（node 內建 `fetch` / `WebSocket`，不必裝 playwright）→ 在頁面裡 `Runtime.evaluate` 點按鈕、讀 `getBoundingClientRect()` 與 `className`，再用 `Emulation.setDeviceMetricsOverride` 一次量 2560 / 1920 / 1400 三種寬度。**注意：`--user-data-dir` 一定要放 `%TEMP%`，不要放 repo 裡** —— Chrome 會鎖住 `Cookies`，Vite watcher 撞到就 EBUSY 崩掉 dev server（`watch.ignored` 已加 `**/tmp/**`，但放外面才是正解）。
 
 ## 4. 執行計畫（逐步 commit，方便回檔）
 

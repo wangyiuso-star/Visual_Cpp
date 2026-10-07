@@ -1,6 +1,26 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**發布 v0.11.1 —— 修「數據結構樹 / 遞歸樹沒辦法並排」**（使用者回報：改完之後數據結構/遞歸樹沒辦法並列了）。
+  - **症狀**：右側面板的樹 / BST / 堆 / 遞歸樹永遠佔整行，不能跟別的卡片並排（其他卡片可以）。
+  - **根因是兩個疊在一起的 bug**（都不是這次重構引入的，用 `git show v0.9.7/v0.9.8/v0.10.0/HEAD:src/components/VariablesPanel.tsx` 逐版比對確認）：
+    1. **v0.9.8 的「面板 ≥ TREE_PACK_MIN 才並排」只做了一半**：寬度判斷 `treeAutoWide` 算出來了，但呼叫端傳的是**死的 `true`**（`cardView('@calltree', true)`、`cardView(name, isTreeLike(cell))`）→ 樹類卡片永遠 wide。**從 v0.9.8 起就一直是壞的。**
+    2. **面板寬度從來沒被量到**：寬度是用 `useEffect([]) + panelRef` 量 `.viz-body`，但第一帧 `snapshot === null` 走的是另一棵**沒有掛 ref** 的子樹 → `panelRef.current === null` 就直接 return，之後跑起來也不會再掛 → `panelW` 永遠 0 → 就算修好 (1) 也還是永遠「窄面板」。
+  - **修法**：
+    1. 呼叫端真的用 `treeAutoWide`：`cardView('@calltree', treeAutoWide)`、`cardView(item.v.name, isTreeLike(item.v.cell) && treeAutoWide)`。
+    2. 量寬度改用 **callback ref**（`useCallback((el) => …)` + `roRef`），而且**兩條分支都掛 `ref={panelRef}`** —— 節點被換掉或重新掛載都會重新量。
+    3. 判斷抽成 `panelLayout.treeAutoWideOf(panelW)`（可測的純函式），VariablesPanel 只呼叫它。
+  - **驗證（真的開瀏覽器量 DOM，不是只看測試）**：headless Chrome（`--headless=new --remote-debugging-port=9333`，profile 放 `%TEMP%`）+ CDP（node 內建 `fetch`/`WebSocket`，腳本 `tmp/cdp-probe*.mjs`）→ 在頁面裡點「運行 / 跳轉」、用 `Emulation.setDeviceMetricsOverride` 換寬度、量每張卡片的 className 與座標：
+
+    | 視窗寬 | 面板寬 | .viz-main | 量到的結果 |
+    |---|---|---|---|
+    | 2560 | 1146 | 980 | 遞歸樹與 `a` 陣列**同列**（`perRow [2,1]`）；Dijkstra 最後一步的 `pq`（priority_queue，樹狀）與 `g` 同列 → **可以並排 ✅** |
+    | 1920 | 858 | 692 | 只有一欄 —— 網格 `minmax(360px,1fr)` 自己放不下兩欄（`.viz-scalars` 佔掉約 134px），不是樹的規則擋的 |
+    | 1400 | 624 | — | 樹佔整行（面板 < 800，**刻意如此**：窄面板時半寬會看不清） |
+
+    修好前（同一支程式、1920）：BST 卡片是 `var card-wide`、遞歸樹是 `calltree-section card-wide`。
+  - **新增契約測試**（`test/panellayout-test.ts`，現 47 項）：`treeAutoWideOf` 的四個門檻 + 「兩個 `.viz-body` 分支都掛了 `panelRef`」+ 「呼叫端不能傳死的 `true`」—— 這兩條正是這次兩個 bug 的形狀，誰再改回去就立刻 FAIL。
+  - **順手修掉的坑**：headless Chrome 的 `--user-data-dir` 一開始放在 repo 的 `tmp/` 裡 → Chrome 鎖住 `Cookies` → Vite watcher **EBUSY 直接崩掉 dev server**（跟之前 `*.TMP` 那個老坑同一類）。修法：`vite.config.ts` 的 `watch.ignored` 加 `**/tmp/**`（`tmp/` 本來就是放臨時腳本的地方），驗證用的 profile 改放 `%TEMP%`。
 - 2026-08-17：**發布 v0.11.0 —— 解耦重構第二批（S0–S9）完成，型別債清零**。
   - **結果**：`interpreter.ts` **2930 → 113 行**（只剩 `run()` 與公開型別轉出）；`App.tsx` **493 → 206 行**；**`tsc --noEmit` 31 → 0**；測試 36 → **37 檔**（新增 `appshell-test`）。
   - **模組地圖**（依賴單向、無循環）：
