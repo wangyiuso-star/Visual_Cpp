@@ -103,7 +103,8 @@ export default function CodeEditor({
       domEventHandlers: {
         mousedown(view, line, event) {
           event.preventDefault()
-          if (event.button !== 0) return false
+          // CodeMirror 的 domEventHandlers 把事件型別寬鬆地標成 Event，其實是滑鼠事件
+          if ((event as MouseEvent).button !== 0) return false
           const lineNum = view.state.doc.lineAt(line.from).number
           onToggleRef.current(lineNum)
           return true

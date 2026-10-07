@@ -125,6 +125,8 @@ export function cellLabel(cell: Cell): string {
   if (cell.kind === 'pair') return 'pair<' + typeShape(cell.firstType) + ',' + typeShape(cell.secondType) + '>'
   if (cell.kind === 'deque') return 'deque<' + typeShape(cell.elemType) + '> · 长度 ' + cell.items.length
   if (cell.kind === 'struct') return cell.structName + ' · 成员 ' + cell.members.length
+  // 同 VariablesPanel：ref 應該在 dumpAll 就解引用完了
+  if (cell.kind === 'ref') return '引用 → ' + cell.target.name
   return 'vector<' + typeShape(cell.elemType) + '> · 长度 ' + cell.cells.length
 }
 

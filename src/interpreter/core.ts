@@ -13,9 +13,9 @@ import { inadequateInputMsg, readCinToken } from './input'
 import { execBuiltin, execMethod } from './builtins'
 import type { EvalCtx } from './builtins'
 import { callPath, dumpAll, getVar, mark, markCondition, updateCallAt } from './snapshot'
-import { Memory } from './memory'
+import { Memory, asIndexable } from './memory'
 import type { BstNode, Cell, ScalarValue } from './memory'
-import type { CallExpr, Expr, InitExpr, MethodCallExpr, ScalarTypeName, Stmt, Type, VarDecl } from './ast'
+import type { AssignExpr, CallExpr, Expr, InitExpr, MethodCallExpr, ScalarTypeName, Stmt, Type, UpdateExpr, VarDecl } from './ast'
 
 export function* sizeofOperand(rt: Runtime, operand: Expr, line: number): Generator<Snapshot, number> {
   // sizeof(int) / sizeof(long long)：運算元是型別名
@@ -156,9 +156,11 @@ export function* resolveTarget(rt: Runtime, expr: Expr, forWrite = false): Gener
       if (idx < 1 || idx > parent.cell.size) throw new RuntimeError('tree 下标 ' + idx + ' 越界（范围 1..' + parent.cell.size + '）', expr.line)
       return { name: parent.name, path: parent.path.concat(idx), cell: parent.cell.nodes[idx], mem: parent.mem }
     }
-    const len = parent.cell.kind === 'array' ? parent.cell.size : parent.cell.cells.length
+    const cells = asIndexable(parent.cell)
+    if (!cells) throw new RuntimeError('不能对 ' + parent.cell.kind + ' 取下标', expr.line)
+    const len = cells.length
     if (idx < 0 || idx >= len) throw new RuntimeError('下标 ' + idx + ' 越界（长度 ' + len + '）', expr.line)
-    return { name: parent.name, path: parent.path.concat(idx), cell: parent.cell.cells[idx], mem: parent.mem }
+    return { name: parent.name, path: parent.path.concat(idx), cell: cells[idx], mem: parent.mem }
   }
   if (expr.kind === 'member') {
     const obj = yield* resolveTarget(rt, expr.object, forWrite)
@@ -344,7 +346,7 @@ export function* evalReturnValue(rt: Runtime, expr: Expr | undefined): Generator
   return { rv, cell: rv.cell ?? null }
 }
 
-export function* execAssign(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
+export function* execAssign(rt: Runtime, expr: AssignExpr): Generator<Snapshot, RV> {
   const value = yield* evalExpr(rt, expr.value)
   const lv = yield* resolveTarget(rt, expr.target, true)
   if (lv.cell.kind !== 'scalar') {
@@ -371,7 +373,7 @@ export function* execAssign(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   return { type: lv.cell.type, v: sv }
 }
 
-export function* execUpdate(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
+export function* execUpdate(rt: Runtime, expr: UpdateExpr): Generator<Snapshot, RV> {
   const lv = yield* resolveTarget(rt, expr.target, true)
   if (lv.cell.kind !== 'scalar') throw new RuntimeError('非法的自增/自减目标', expr.line)
   const binOp = expr.op === '++' ? '+' : '-'
@@ -537,7 +539,7 @@ export function* execDecl(rt: Runtime, d: VarDecl): Generator<Snapshot> {
     }
   }
   if (inferPositions.length > 0) {
-    if (!d.initList) throw new RuntimeError('省略数组大小时必须提供初始化列表', line)
+    if (!d.initList || d.initList.kind !== 'list') throw new RuntimeError('省略数组大小时必须提供初始化列表', line)
     if (inferPositions.length > 1) throw new RuntimeError('暂只支持省略最外层数组大小', line)
     arraySizes[inferPositions[0]] = d.initList.items.length
   }

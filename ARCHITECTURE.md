@@ -18,7 +18,7 @@
 | `src/components/viz/window.tsx` | 334 | 一維／二維／struct 矩陣視窗 + 共用的 `useWindowOffset` |
 | `src/components/viz/containers.tsx` | 310 | string / stack / queue / deque / set / map / struct / pair 檢視 |
 | `src/interpreter/interpreter.ts` | **113** | 只剩 `run()`（公開入口）+ 公開型別轉出（`Snapshot` / `CallNode` / `RunOptions` / `RuntimeError`）—— 從 2930 行一路降到這裡 |
-| 其他 | ~900 | lexer(348) / memory(165) / snapshot(159) / ast(118) / runtime(118) / cells(77) / input(53) / CodeEditor / panelLayout / editorSetup / graphLimit / ErrorBoundary / presets |
+| 其他 | ~930 | lexer(348) / memory(193) / snapshot(159) / ast(121) / runtime(118) / cells(77) / input(53) / CodeEditor / panelLayout / editorSetup / graphLimit / ErrorBoundary / presets |
 
 ### v0.10.0 做了什麼
 
@@ -56,9 +56,18 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 
 **這層現在也有自動化測試了**：`test/appshell-test.ts`（23 項）包含用 `react-dom/server` 把整個 `<App/>` 渲染一次（以前只靠 build + 手動開瀏覽器）。
 
-### (C) 31 個既有的 TypeScript 型別錯誤（`tsc --noEmit`）
-`npm run build` 只跑 vite（rolldown 會剝掉型別、**不做型別檢查**），所以這些錯誤不會擋住建置，但會蓋掉「新增的型別錯誤」。目前幾乎都是同一類：`Cell` 是聯合型別，存取 `.cells` / `.elemType` 前沒有先窄化（`ref` 這種 Cell 沒有那兩個欄位）。
-建議做法：在 `memory.ts` 加幾個窄化小工具（`asSeq(cell): Cell[] | null`、`elemTypeOf(cell): Type | null`），把 31 處一次換掉；之後 `tsc --noEmit` 應該回到 0，就能把它加進 CI/發版流程。
+### (C) 31 個既有的 TypeScript 型別錯誤 —— **已清到 0（S8）**
+`npm run build` 只跑 vite（rolldown 會剝掉型別、**不做型別檢查**），所以這些錯誤不會擋住建置，但會蓋掉「新增的型別錯誤」。
+
+清法（31 → 0，分五類）：
+1. **`memory.ts` 加窄化工具** `asIndexable(cell): Cell[] | null`（只有 array/vector —— stack/queue/set 的 `s[0]` 在 C++ 也不合法，所以刻意不算，要讓它報錯）與 `elemTypeOf(cell): Type | null`。渲染層（window / graph / format）用它，順手拿掉「`cell.kind === 'array' ? cell.size : cell.cells.length`」這種重複分支（array 的 `cells.length` 永遠等於 `size`）。
+2. **`ast.ts` 補節點子型別** `AssignExpr` / `UpdateExpr`（`Extract<Expr, {kind:'assign'|'update'}>`，和既有的 `CallExpr` / `MethodCallExpr` 同一個模式）→ `execAssign` / `execUpdate` 的參數不再是寬的 `Expr`，`.value` / `.target` / `.op` / `.prefix` 就合法了。
+3. **可變陣列的推論**：`const members = []` + `push({kind:'scalar',…})` 會被推成 `kind: string`（不是 `Cell`）→ 明確標 `{ name: string; cell: Cell }[]`（`builtins.ts` / `cells.ts`）。
+4. **`ref` 真的不該出現在面板**：`dumpAll` 早就解引用完了 → `VariablesPanel` / `format.cellLabel` 各加一個明確分支（畫成「（未解析的引用 x）」而不是靜默畫成空容器）。
+5. 零星的：`parser.ts` 的 `arraySizes` 型別應為 `(Expr | undefined)[]`（省略大小的維度）；CodeMirror gutter 的 `domEventHandlers` 事件型別是寬鬆的 `Event`，要自己收窄成 `MouseEvent`。
+6. **順手把 `InitExpr` 的推斷缺口補成明確錯誤**：`int a[] = x`（省略大小但沒有初始化列表）以前會存取到 `undefined.items` → 現在是「省略数组大小时必须提供初始化列表」。
+
+現在 `npm run typecheck`（= `tsc --noEmit`）是 **0 錯誤**，`npm run verify` 會依序跑 typecheck → test → build。
 
 ### (D) 測試檔的樣板重複
 每個 `test/*.test.ts` 都自己重寫一次 `pass/fail/check/eq/err`（每個約 15 行 × 35 個檔）。可以抽到 `test/_helpers.ts`（底線開頭，`scripts/run-tests.mjs` 不會把它當成測試檔，但仍可被 import）。價值中等、風險接近零。
@@ -82,7 +91,7 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 1. `test/interp-golden-test.ts` —— **特性化 golden**：把 31 個代表性程式的「每一帧 digest」整體雜湊錄下來。
    重構不該改變任何行為，digest 一變就是搬檔時動到了什麼。要**刻意**改行為時：`UPDATE_GOLDEN=1 node test/interp-golden.mjs` 重錄，並在 commit message 說明為什麼。
 2. 既有 37 個測試檔 —— 語意與渲染（`render-test` / `hkoi-presets-test` 會把所有 preset 的每一幀渲染成 HTML）。
-3. `node_modules/.bin/tsc.cmd --noEmit` —— 目前 31 個既有錯誤（見 §2C），S8 會清掉並納入流程。
+3. `npm run typecheck`（`tsc --noEmit`）—— **S8 之後是 0 錯誤**，從此任何新增的型別錯誤都會立刻看得出來。發版前跑 `npm run verify`（typecheck + test + build）。
 
 | 步驟 | 內容 | 檔案 | 驗證 |
 |---|---|---|---|
@@ -94,7 +103,7 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 | **S5** ✅ | 抽出 `interpreter/snapshot.ts`（157 行）：`dumpAll` / `collectLocals` / `updateActiveLocals` / `mark` / `markCondition` / `formatCellValue` + 呼叫樹工具。**原計畫的 `stmts.ts` 併進 S6** —— 它和求值互相遞迴，單獨拆會循環 import | 新檔 + `interpreter.ts` | golden ✅（`d9cb389`） |
 | **S6** ✅ | 抽出 `interpreter/core.ts`（826 行）：`sizeofOperand` / `applyStructInit` / `resolveTarget` / `evalExpr` / `execAssign` / `execUpdate` / `execCall` / `execMethodCall` / `execDecl` / `execBlock` / `cinReadTargets` / `execStmt`（**求值 + 敘述 + 呼叫同檔**，理由見 §2A）。`interpreter.ts` 933 → **113 行**，只剩 `run()` + 型別轉出 | 新檔 + `interpreter.ts` | golden ✅（31 檔全過、`tsc` 仍 31） |
 | **S7** ✅ | `App.tsx` 493 → 206 行：`usePlayer.ts`（187）/ `Topbar.tsx`（150）/ `Splitter.tsx`（100）/ `OutputPane.tsx`（31，含純函式 `outputView`）。新增 `test/appshell-test.ts`（23 項，含整個 `<App/>` 的 SSR 渲染煙霧測試） | 4 新檔 + `App.tsx` | 37 檔全過 ✅ + tsc 仍 31 + dev server 五個新模組都 200 |
-| **S8** | `memory.ts` 加 `asSeq()` / `elemTypeOf()` 等窄化工具，清掉 31 個型別錯誤；`package.json` 加 `typecheck` 腳本並在發版流程跑它 | `memory.ts`、各檔、`package.json` | `tsc --noEmit` = 0 |
+| **S8** ✅ | `memory.ts` 加 `asIndexable()` / `elemTypeOf()`、`ast.ts` 加 `AssignExpr` / `UpdateExpr`，清掉**全部 31 個**型別錯誤（做法見 §2C）；`package.json` 加 `verify`（typecheck + test + build）。順手把「不能下標的容器」從 undefined 崩潰改成明確 RuntimeError，並補 5 條 `compat-test` 斷言 | `memory.ts` / `ast.ts` / `core.ts` / `builtins.ts` / `cells.ts` / `parser.ts` / `viz/*` / `VariablesPanel.tsx` / `CodeEditor.tsx` / `package.json` | `npm run typecheck` = 0 ✅ + 37 檔全過 ✅ |
 | **S9** | 測試樣板抽 `test/_helpers.ts`（`check` / `eq` / `err` / `run1`） | `test/*.ts` | `npm test` 全過 |
 
 做完 S0–S9 再發一個版本（v0.11.0）。中途每一步都可以單獨發版，因為每一步都是完整可用的狀態。

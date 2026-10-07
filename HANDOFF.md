@@ -25,6 +25,14 @@
     - `Splitter.tsx`（100 行）：`<Splitter orientation="vertical|horizontal">` + `useVerticalDrag`（左右）+ `useStackDrag`（程式碼／cin／輸出三段的上下夾制）。
     - `OutputPane.tsx`（31 行）：面板本體 + **純函式 `outputView(cur, error)`**（執行期錯誤 > 這一步的輸出 > 解析錯誤 > 「尚未執行」）—— 以前這段 if/else 埋在元件裡，node 端測不到。
     - **新增測試 `test/appshell-test.ts`（23 項）**：`outputView` 五個分支 + 真快照 + 11 條原始碼契約（`setInterval` 不能在 App、`cond-menu` 不能在 App、App 不能有裸的 `className="divider"`、App ≤ 260 行…）+ **用 `react-dom/server` 把整個 `<App/>` 渲染一次**（拆完最容易斷的是接線）。順手修了 `editor-setup-test` 裡「設定選單在 App」的假設（JSX 搬去 Topbar，接線留在 App）。
+  - **S8**：**`tsc --noEmit` 的 31 個既有型別錯誤 → 0**（`npm run typecheck` 從此可用；新增 `npm run verify` = typecheck + test + build）。分五類修：
+    1. `memory.ts` 加 **`asIndexable(cell): Cell[] | null`**（**只有 array/vector** —— stack/queue/set 的 `s[0]` 在 C++ 也不合法，所以刻意不算進「可下標」；`array` 的 `cells.length` 永遠等於 `size`，呼叫端不用再分支）與 `elemTypeOf(cell): Type | null`；渲染層（`viz/window` / `viz/graph` / `viz/format`）改用它們。
+    2. `ast.ts` 補節點子型別 `AssignExpr` / `UpdateExpr`（`Extract<Expr, {kind:'assign'|'update'}>`，和既有的 `CallExpr` / `MethodCallExpr` 同模式）→ `execAssign` / `execUpdate` 不再是寬的 `Expr`。
+    3. `const members = []` + `push({kind:'scalar',…})` 被推成 `kind: string`（不是 `Cell`）→ 明確標型別（`builtins.ts` / `cells.ts`）。
+    4. **`ref` 真的不該出現在面板**（`dumpAll` 早就解引用完）→ `VariablesPanel` / `format.cellLabel` 各加一個明確分支，寧可顯示「（未解析的引用 x）」也不要靜默畫成空容器。
+    5. 零星：`parser.ts` 的 `arraySizes` 型別是 `(Expr | undefined)[]`；CodeMirror gutter 的 `domEventHandlers` 事件是寬鬆 `Event`，要自己收窄成 `MouseEvent`。
+    - **順手的行為修正（不是純型別）**：①以前對 set/stack/queue/pair/struct 取下标會變成 `undefined.length` 崩潰（使用者看到的是 `Cannot read properties of undefined`）→ 現在是明確的 **`不能对 set 取下标`**；②`int a[] = x`（省略大小卻沒有初始化列表）以前也是存取 `undefined.items` → 現在是「省略数组大小时必须提供初始化列表」。兩者都補進 `test/compat-test.ts`（+5 條，現 69 項）。
+    - **驗證**：`npm run typecheck` **0 錯誤**、`npm test` **37/37**（含 31 個 golden 案例 —— 顯示 digest 一字不差，證明型別修正沒有動到行為）、`npm run build` ✅。
 - 2026-08-17：**v0.10.0 —— 解耦重構（第一批）：`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/` 五個模組，並去掉一份複製**。
   - **起因**：使用者問「整個專案有沒有需要對/解耦的地方？方便後續更新」。
   - **盤點**（寫進新增的 `ARCHITECTURE.md`）：`interpreter.ts` **2930** / `parser.ts` 1019 / `index.css` 715 / `App.tsx` 493（**單一 480 行元件**）/ `VariablesPanel.tsx` 1983。

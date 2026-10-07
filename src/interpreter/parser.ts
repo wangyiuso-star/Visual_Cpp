@@ -538,7 +538,8 @@ class Parser {
 
   parseOneDeclarator(line: number, base: Type): VarDecl {
     const name = this.expectIdent().value
-    const arraySizes: Expr[] = []
+    // 省略大小的維度（int a[][3]）在這裡放 undefined，由 execDecl 推斷
+    const arraySizes: (Expr | undefined)[] = []
     let vecSize: Expr | undefined
     let vecFill: Expr | undefined
     let init: Expr | undefined

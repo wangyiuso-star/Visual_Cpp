@@ -99,5 +99,13 @@ yes('C 風格 cast (int)v.size()', 'int main(){ vector<int> v; v.push_back(1); c
 yes('cin.get()', 'int main(){ char c; c = cin.get(); cout<<c; return 0; }', 'a', 'a')
 yes('using (型別別名 / namespace)', 'using ll = long long;\nint main(){ ll x=5; cout<<x; return 0; }', '5')
 
+// ---------- C. 不能下標的容器要明確報錯（S8：以前是 undefined 崩潰）----------
+// C++ 也不允許 s[0] / st[0]，所以寧可報錯也不要靜默取到元素或吐 undefined。
+no('set 不能下標 s[0]', 'int main(){ set<int> s; s.insert(1); cout<<s[0]; return 0; }')
+no('stack 不能下標 st[0]', 'int main(){ stack<int> st; st.push(1); cout<<st[0]; return 0; }')
+no('queue 不能下標', 'int main(){ queue<int> q; q.push(1); cout<<q[0]; return 0; }')
+no('省 array 大小卻沒有初始化列表', 'int main(){ int a[]; return 0; }')
+no('省 array 大小卻用純量初始化（int a[] = x）', 'int main(){ int x=1; int a[] = x; return 0; }')
+
 console.log('==== compat-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)

@@ -9,7 +9,7 @@ import type { StructDef, Type } from './ast'
 export function allocStruct(rt: Runtime, structName: string, line: number): Cell {
   const def = rt.structs.get(structName)
   if (!def) throw new RuntimeError('未定义的结构体 ' + structName, line)
-  const members = def.members.map((m) => ({
+  const members = def.members.map((m): { name: string; cell: Cell } => ({
     name: m.name,
     cell: m.type.kind === 'scalar' ? { kind: 'scalar', type: m.type.name, value: null } : allocFromType(m.type, [], true, rt.structs),
   }))

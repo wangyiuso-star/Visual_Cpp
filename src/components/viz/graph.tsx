@@ -1,18 +1,20 @@
 // 圖（鄰接表）與它的表格切換。
 import { useState } from 'react'
+import { asIndexable } from '../../interpreter/memory'
 import type { Cell, VarView } from '../../interpreter/memory'
 import { cellCls, formatCellShort, formatScalar, isHit } from './format'
 import { Windowed2D } from './window'
 import { GRAPH_MAX_NODES, graphTooBigReason } from '../graphLimit'
 
-export function companionArray(name: string, N: number, vars: VarView[]): Cell | null {
+/** 找同時顯示、長度相同的「距離陣列」（dist / d / dp…），圖上的節點標籤要顯示它的值。 */
+export function companionArray(name: string, N: number, vars: VarView[]): Cell[] | null {
   const re = /^(dist|dis|distance|shortest|d|f|dp)$/i
   for (const v of vars) {
     if (v.name === name) continue
     const c = v.cell
     if ((c.kind === 'array' || c.kind === 'vector') && c.elemType.kind === 'scalar') {
-      const len = c.kind === 'array' ? c.size : c.cells.length
-      if (len === N && re.test(v.name)) return c
+      const cells = asIndexable(c)
+      if (cells && cells.length === N && re.test(v.name)) return cells
     }
   }
   return null
@@ -35,7 +37,9 @@ export function GraphView({
   judges: Set<string>
   vars: VarView[]
 }) {
-  const N = cell.kind === 'array' ? cell.size : cell.cells.length
+  // 呼叫端（VariablesPanel）已經限定這裡是 array / vector；不是就畫成空，不猜。
+  const cells = asIndexable(cell) ?? []
+  const N = cells.length
   const companion = companionArray(name, N, vars)
   if (N === 0) {
     return (
@@ -46,7 +50,7 @@ export function GraphView({
   }
   const edges: { from: number; to: number; weight: number | null }[] = []
   for (let i = 0; i < N; i++) {
-    const row = cell.cells[i]
+    const row = cells[i]
     if (row && row.kind === 'vector') {
       for (const nb of row.cells) {
         if (nb.kind === 'scalar' && typeof nb.value === 'number') {
@@ -140,7 +144,8 @@ export function GraphView({
         {Array.from({ length: N }, (_, i) => {
           const p = pos(i)
           const cls = nodeHit(i)
-          const val = companion && companion.cells[i].kind === 'scalar' ? formatScalar(companion.cells[i].type, companion.cells[i].value) : String(i)
+          const cv = companion ? companion[i] : null
+          const val = cv && cv.kind === 'scalar' ? formatScalar(cv.type, cv.value) : String(i)
           return (
             <g key={i}>
               <circle className={'graph-node' + (cls ? ' ' + cls : '')} cx={p.x} cy={p.y} r={nodeR} />
@@ -175,7 +180,7 @@ export function AdjListView({
 }) {
   // 预设就用表格：节点数已经超标的（例如 501×501 的 DP 表）不要一开始就画图。
   // 使用者仍可按「查看图」，那时 GraphView 会说明为什么不画，而不是把浏览器卡死。
-  const rows = cell.kind === 'array' ? cell.size : cell.cells.length
+  const rows = (asIndexable(cell) ?? []).length
   const [showTable, setShowTable] = useState(rows > GRAPH_MAX_NODES)
   return (
     <div>

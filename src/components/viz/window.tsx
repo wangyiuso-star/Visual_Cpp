@@ -1,6 +1,7 @@
 // 視窗式檢視：一維陣列、二維矩陣、struct 矩陣。
 // 二維與 struct 矩陣共用同一套「偏移 + 跟隨讀寫 + 滑桿」邏輯（以前是兩份複製）。
 import { useEffect, useRef, useState } from 'react'
+import { asIndexable } from '../../interpreter/memory'
 import type { Cell, VarView } from '../../interpreter/memory'
 import { VIEW_MAX_ITEMS, WIN_1D, WIN_2D, cellCls, formatCellShort, isHit, rowLen } from './format'
 
@@ -185,7 +186,9 @@ export function Windowed1D({
   focus: number[] | undefined
 }) {
   const { ref, cols } = useFit(WIN_1D, 40)
-  const len = cell.kind === 'array' ? cell.size : cell.cells.length
+  // 呼叫端已經限定這裡是 array / vector（cells.length 就等於 array 的 size）
+  const cells = asIndexable(cell) ?? []
+  const len = cells.length
   const maxOff = Math.max(0, len - cols)
   const [off, setOff] = useState(0)
 
@@ -210,7 +213,7 @@ export function Windowed1D({
     <div ref={ref}>
       <div className="cells">
         {idxs.map((i) => {
-          const sub = cell.cells[i]
+          const sub = cells[i]
           const p = path.concat(i)
           return (
             <div className="cell-wrap" key={i}>
@@ -249,9 +252,10 @@ export function Windowed2D({
 }) {
   // 视窗固定 5×5（使用者要的是「固定大小 + 写入时自动跳转」，不要跟着宽度变，
   // 这样每张卡片看到的行列数是可预期的；卡住的是写入/读取的那一格会自动滚进视窗）。
-  const rows = cell.kind === 'array' ? cell.size : cell.cells.length
+  const cells = asIndexable(cell) ?? []
+  const rows = cells.length
   let maxCols = 0
-  for (let i = 0; i < cell.cells.length; i++) maxCols = Math.max(maxCols, rowLen(cell.cells[i]))
+  for (let i = 0; i < cells.length; i++) maxCols = Math.max(maxCols, rowLen(cells[i]))
 
   const { off, setOff, maxRowOff, maxColOff } = useWindowOffset(rows, maxCols, focus, WIN_2D, WIN_2D)
 
@@ -280,7 +284,7 @@ export function Windowed2D({
         )}
         <div className="nested">
           {rowIdxs.map((i) => {
-            const row = cell.cells[i]
+            const row = cells[i]
             const rl = rowLen(row)
             if (maxCols === 0) {
               return (
@@ -305,7 +309,7 @@ export function Windowed2D({
                         </div>
                       )
                     }
-                    const sub = row.cells[j]
+                    const sub = (asIndexable(row) ?? [])[j]
                     const p = path.concat(i, j)
                     return (
                       <div className="cell-wrap" key={j}>

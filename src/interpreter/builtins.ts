@@ -59,7 +59,7 @@ function* buildStructFromList(rt: Runtime, ctx: EvalCtx, elemType: Type, items: 
   if (elemType.kind !== 'struct') throw new RuntimeError('初始化列表只支持 struct 元素', line)
   const def = rt.structs.get(elemType.name)
   if (!def) throw new RuntimeError('未定义的结构体 ' + elemType.name, line)
-  const members = []
+  const members: { name: string; cell: Cell }[] = []
   for (let i = 0; i < def.members.length; i++) {
     const m = def.members[i]
     if (i < items.length && m.type.kind === 'scalar') {

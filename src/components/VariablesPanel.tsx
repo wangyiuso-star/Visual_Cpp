@@ -461,6 +461,15 @@ function CellNode({
   if (cell.kind === 'pair') return <PairView name={name} path={path} cell={cell} reads={reads} writes={writes} judges={judges} />
   if (cell.kind === 'struct') return <StructView name={name} path={path} cell={cell} reads={reads} writes={writes} judges={judges} />
 
+  // ref（引用）在 dumpAll 就已經解引用，不該走到這裡；真的出現就明講，不要靜默畫成空容器
+  if (cell.kind === 'ref') {
+    return (
+      <div className="viz-empty" style={{ padding: '4px 0' }}>
+        （未解析的引用 {cell.target.name}）
+      </div>
+    )
+  }
+
   const len = cell.kind === 'array' ? cell.size : cell.cells.length
   if (len === 0) {
     return (

@@ -115,3 +115,6 @@ export type Expr =
 // 免得參數寫 Expr 卻一直存取 .args（那是既有的型別債，會讓 tsc 噴上百條假錯誤）。
 export type CallExpr = Extract<Expr, { kind: 'call' }>
 export type MethodCallExpr = Extract<Expr, { kind: 'method_call' }>
+export type AssignExpr = Extract<Expr, { kind: 'assign' }>
+export type UpdateExpr = Extract<Expr, { kind: 'update' }>
+export type InitListExpr = Extract<Expr, { kind: 'init_list' }>

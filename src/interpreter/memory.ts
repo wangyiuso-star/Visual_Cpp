@@ -28,6 +28,34 @@ export type Cell =
   // 「参数（别名）」徽章只认 param，不然循环变量会被误标成参数。
   | { kind: 'ref'; origin?: 'param' | 'loop'; target: { mem: Memory; name: string; path: number[] } }
 
+/**
+ * array / vector 的子格子。**只含可以下標的容器**：stack / queue / set 這些刻意不算 ——
+ * C++ 也不允許 s[0]，要讓它報錯而不是靜默取到元素。
+ * array 的 cells.length 永遠等於 size（配置時就填滿），所以呼叫端不用再分支。
+ * 不是 array/vector 就回 null —— 讓「型別契約被打破」變成 tsc 的錯，而不是 undefined 的崩潰。
+ */
+export function asIndexable(cell: Cell): Cell[] | null {
+  if (cell.kind === 'array' || cell.kind === 'vector') return cell.cells
+  return null
+}
+
+/** 序列型（array/vector/stack/queue/pqueue/deque/set/tree）的元素型別；其他回 null。 */
+export function elemTypeOf(cell: Cell): Type | null {
+  switch (cell.kind) {
+    case 'array':
+    case 'vector':
+    case 'stack':
+    case 'queue':
+    case 'pqueue':
+    case 'deque':
+    case 'set':
+    case 'tree':
+      return cell.elemType
+    default:
+      return null
+  }
+}
+
 export interface CellRef {
   name: string
   path: number[]
