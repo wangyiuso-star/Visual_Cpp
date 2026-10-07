@@ -7,6 +7,12 @@
   - 重構過程中新增的兩個踩坑：①這個檔在磁碟上是 **CRLF**，用腳本切檔時要 `split(/\r?\n/)` 再以 LF 寫回（`git config core.autocrlf=true` 會處理儲存）；②`0-diff` 驗證要看 golden，不要只看 build。
   - **S2**：抽出 `src/interpreter/values.ts`（634 行）—— 全部**純函式**：數值轉換與比較（`num` / `coerceTo` / `cmp` / `eq` / `charCode`）、容器比較（`cellOrder` / `valueOrder` / `seqOf`…）、運算（`applyBinary` / `numeric` / `combineAssign`）、格式化（`toStringVal` / `formatDouble` / `formatExpr`）、`sizeof` 的位元組計算、`set`/`map`/`heap`/`bst` 的純演算法。`interpreter.ts` 2832 → **2259** 行。**踩坑：`typeBytes`/`cellBytes` 其實需要 `Runtime` 型別（查 struct 成員大小），所以 values.ts 要 `import type { Runtime }`；不補的話 tsc 一次多 4 個錯誤。**
   - **S3**：抽出 `src/interpreter/input.ts`（53 行）—— cin 的游標模型：`skipInputSpace` / `readCinToken`（char 目標只吃一個字元）/ `readCinLine` / `inadequateInputMsg`。`interpreter.ts` 2259 → **2215** 行。使用游標的 generator（cin 陳述式、`cin >> x` 條件、getline）留在原地，等 S5 一起搬到 stmts。**順手做了一個可重複的切檔工具 `tmp/extract.mjs`（來源/目的/檔頭/項目名 → 自動加 export、自動產生 import），S4–S6 都會用它。**
+  - **S4（最大的一步）**：抽出 **`src/interpreter/builtins.ts`（1046 行）** 與 **`src/interpreter/cells.ts`（77 行）**。
+    - `cells.ts`：純粹的 Cell 配置工具（`allocStruct` / `allocFromType` / `allocVector` / `allocTree` / `fillAllScalars`）—— 宣告（execDecl）與容器方法都要用。
+    - `builtins.ts`：`execCall` 的**內建函式段**（sort / 數學 / stoi / memset / sizeof / 區間寫法…）＋ `execMethodCall` 的**全部主體**（string/vector/stack/queue/map/set/… 方法），以及只被它們用到的輔助（`resolveRange` / `buildElemCell` / `buildStructFromList` / `stableSortWithCmp` / `callComparator` / `requireStringArg` / `MUTATING_METHODS`）。
+    - **循環依賴怎麼解**：內建函式要「求值」（`evalExpr`）與「取左值」（`resolveTarget`），但那兩個在核心、而核心又呼叫 builtins → 所以核心用 **`EvalCtx`** 把能力**注入**（`const evalCtx: EvalCtx = { evalExpr, resolveTarget }`），builtins 只依賴型別與純函式。`execCall` / `execMethodCall` 在 interpreter 裡只剩幾行的轉發。
+    - `interpreter.ts` 2215 → **1078 行**（累計 2930 → 1078，**−63%**）。
+  - S4 踩到的坑（都記在 commit 裡）：①我的字串切檔工具把**註解**算進前一個項目的範圍，害我以為 execCall 的最後一行是 `}` → 改用「往下找第一個 `}`」當邊界；②S2 當時把 import 區塊補在檔案**結尾**（ESM 匯入會被提升，所以編譯與測試都正常），S4 重建檔頭時順手清掉；③注入 `ctx` 的腳本一開始把參數插在 `rt` **前面**，與呼叫端 `(rt, ctx, …)` 對不上 → tsc 的 `Type 'Runtime' is missing … from type 'EvalCtx'` 一次抓出 6 處；④重建檔頭時漏了 `export type { Snapshot, CallNode, RunOptions }` 的轉出，害下游 8 個隱式 any、tsc 一次多 12 個錯誤（補回就回到 31）。
 - 2026-08-17：**v0.10.0 —— 解耦重構（第一批）：`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/` 五個模組，並去掉一份複製**。
   - **起因**：使用者問「整個專案有沒有需要對/解耦的地方？方便後續更新」。
   - **盤點**（寫進新增的 `ARCHITECTURE.md`）：`interpreter.ts` **2930** / `parser.ts` 1019 / `index.css` 715 / `App.tsx` 493（**單一 480 行元件**）/ `VariablesPanel.tsx` 1983。
