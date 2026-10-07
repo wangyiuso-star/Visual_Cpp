@@ -50,7 +50,10 @@ check('真的有绑定到 4 组键', ['Tab', 'Shift-Tab', 'Mod-]', 'Mod-['].ever
 // ---------- 接线的契约测试（以前吃过「改了线但没接上」的亏）----------
 const app = readFileSync('src/App.tsx', 'utf8')
 check('App 把 indentSize 传给 CodeEditor', /indentSize=\{indentSize\}/.test(app))
-check('App 的设定选单里有 Tab 缩排选项', app.indexOf('Tab 缩排') >= 0 && app.indexOf('changeIndentSize') >= 0)
+// S7 之后设定选单的 JSX 搬到 Topbar.tsx，接线（changeIndentSize）还留在 App
+const topbar = readFileSync('src/components/Topbar.tsx', 'utf8')
+check('设定选单里有 Tab 缩排选项', topbar.indexOf('Tab 缩排') >= 0 && app.indexOf('changeIndentSize') >= 0)
+check('Topbar 把缩排选择接回 App（onIndentSizeChange）', /onIndentSizeChange/.test(topbar))
 check('App 会记住选择（localStorage）', app.indexOf('cpp-viz-indent-size') >= 0)
 const ed = readFileSync('src/components/CodeEditor.tsx', 'utf8')
 check('CodeEditor 用 Compartment 动态重设缩排（不重建编辑器）', /indentCompartment\.reconfigure/.test(ed))

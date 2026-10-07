@@ -2,14 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import CodeEditor from './components/CodeEditor'
 import VariablesPanel from './components/VariablesPanel'
 import ErrorBoundary from './components/ErrorBoundary'
-import { DEFAULT_INDENT_SIZE, INDENT_SIZES, normalizeIndentSize } from './components/editorSetup'
-import { parse } from './interpreter/parser'
-import { run } from './interpreter/interpreter'
-import type { Snapshot } from './interpreter/interpreter'
+import Topbar from './components/Topbar'
+import OutputPane, { outputView } from './components/OutputPane'
+import { Splitter, useStackDrag, useVerticalDrag } from './components/Splitter'
+import { DEFAULT_INDENT_SIZE, normalizeIndentSize } from './components/editorSetup'
+import { usePlayer } from './components/usePlayer'
 import { PRESETS } from './presets'
 
 const SAMPLE = '#include <bits/stdc++.h>\nusing namespace std;\n\nint fib(int n) {\n  if (n <= 1) return n;\n  return fib(n - 1) + fib(n - 2);\n}\n\nint main() {\n  cout << fib(5) << endl;\n  return 0;\n}\n'
 
+/**
+ * 主殼：只負責「版面 + 把狀態接起來」。
+ * 播放/單步/斷點在 usePlayer，工具列在 Topbar，輸出面板在 OutputPane，分割線在 Splitter（重構 S7）。
+ */
 export default function App() {
   const [code, setCode] = useState<string>(() => {
     try {
@@ -19,19 +24,11 @@ export default function App() {
       return SAMPLE
     }
   })
-  const [snapshots, setSnapshots] = useState<Snapshot[] | null>(null)
-  const [index, setIndex] = useState(-1)
-  const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState(500)
-  const [error, setError] = useState<string | null>(null)
   const [showIf, setShowIf] = useState(true)
   const [showWhile, setShowWhile] = useState(true)
   const [showFor, setShowFor] = useState(true)
-  const [condMenuOpen, setCondMenuOpen] = useState(false)
-  const [jumpVal, setJumpVal] = useState('')
-  const [editorPct, setEditorPct] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 1500 ? 50 : 55))
-  const [dragging, setDragging] = useState(false)
   const [boolAsInt, setBoolAsInt] = useState(false)
+  const [input, setInput] = useState('')
   // Tab 缩排几个空格（预设 4，见 editorSetup.ts）。这是编辑器设定，不用让快照失效。
   const [indentSize, setIndentSize] = useState<number>(() => {
     try {
@@ -40,88 +37,17 @@ export default function App() {
       return DEFAULT_INDENT_SIZE
     }
   })
-  const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set())
-  const [input, setInput] = useState('')
+  const [editorPct, setEditorPct] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 1500 ? 50 : 55))
   const [codePct, setCodePct] = useState(48)
   const [outPct, setOutPct] = useState(26)
-  const [hDragKind, setHDragKind] = useState<'code-cin' | 'cin-out' | null>(null)
   const cinPct = 100 - codePct - outPct
   const leftBodyRef = useRef<HTMLDivElement>(null)
   const [leftBodyHeight, setLeftBodyHeight] = useState(0)
   const availH = Math.max(0, leftBodyHeight - 12)
 
-  function collect(): Snapshot[] | null {
-    try {
-      const program = parse(code)
-      const snaps: Snapshot[] = []
-      for (const s of run(program, { showCond: { if: showIf, while: showWhile, for: showFor }, boolAsInt, input })) snaps.push(s)
-      return snaps
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      const line = (e as { line?: number }).line
-      setError(line ? '第 ' + line + ' 行：' + msg : msg)
-      return null
-    }
-  }
-
-  function start() {
-    const snaps = collect()
-    if (!snaps) {
-      setSnapshots(null)
-      setIndex(-1)
-      return
-    }
-    setError(null)
-    setSnapshots(snaps)
-    setIndex(0)
-    setPlaying(true)
-  }
-
-  function stepForward() {
-    if (!snapshots) {
-      const snaps = collect()
-      if (!snaps) {
-        setSnapshots(null)
-        setIndex(-1)
-        return
-      }
-      setError(null)
-      setSnapshots(snaps)
-      setIndex(0)
-      return
-    }
-    setIndex((i) => Math.min(i + 1, snapshots.length - 1))
-  }
-
-  function stepBack() {
-    if (!snapshots) return
-    setIndex((i) => Math.max(i - 1, 0))
-  }
-
-  function reset() {
-    setPlaying(false)
-    setIndex(-1)
-    setSnapshots(null)
-    setError(null)
-  }
-
-  function togglePlay() {
-    if (playing) {
-      setPlaying(false)
-      return
-    }
-    if (!snapshots) {
-      start()
-      return
-    }
-    if (index >= snapshots.length - 1) {
-      setIndex(0)
-      setPlaying(true)
-      return
-    }
-    setIndex((i) => i + 1)
-    setPlaying(true)
-  }
+  const player = usePlayer({ code, input, showIf, showWhile, showFor, boolAsInt })
+  const vDrag = useVerticalDrag(setEditorPct)
+  const hDrag = useStackDrag({ codePct, outPct, setCodePct, setOutPct })
 
   function onCodeChange(v: string) {
     setCode(v)
@@ -130,10 +56,7 @@ export default function App() {
     } catch {
       // 忽略
     }
-    setPlaying(false)
-    setSnapshots(null)
-    setIndex(-1)
-    setError(null)
+    player.invalidate()
   }
 
   // cin 输入也是 collect() 的输入之一，所以改了它同样要让快照失效。
@@ -142,19 +65,14 @@ export default function App() {
   // 刷新（清空 snapshots）才会好 —— 这正是使用者遇到的现象。
   function onInputChange(v: string) {
     setInput(v)
-    setPlaying(false)
-    setSnapshots(null)
-    setIndex(-1)
-    setError(null)
+    player.invalidate()
   }
 
   function changeShow(kind: 'if' | 'while' | 'for', val: boolean) {
     if (kind === 'if') setShowIf(val)
     else if (kind === 'while') setShowWhile(val)
     else setShowFor(val)
-    setSnapshots(null)
-    setIndex(-1)
-    setPlaying(false)
+    player.invalidate()
   }
 
   function changeIndentSize(size: number) {
@@ -169,110 +87,8 @@ export default function App() {
 
   function changeBoolAsInt(val: boolean) {
     setBoolAsInt(val)
-    setSnapshots(null)
-    setIndex(-1)
-    setPlaying(false)
+    player.invalidate()
   }
-
-  function toggleBreakpoint(line: number) {
-    setBreakpoints((prev) => {
-      const next = new Set(prev)
-      if (next.has(line)) next.delete(line)
-      else next.add(line)
-      return next
-    })
-  }
-
-  function doJump() {
-    if (!snapshots) return
-    const n = parseInt(jumpVal, 10)
-    if (Number.isNaN(n)) return
-    setPlaying(false)
-    setIndex(Math.max(0, Math.min(n - 1, snapshots.length - 1)))
-  }
-
-  useEffect(() => {
-    if (!playing || !snapshots) return
-    const id = window.setInterval(() => {
-      setIndex((i) => Math.min(i + 1, snapshots.length - 1))
-    }, speed)
-    return () => window.clearInterval(id)
-  }, [playing, snapshots, speed])
-
-  useEffect(() => {
-    if (snapshots && index >= snapshots.length - 1) setPlaying(false)
-  }, [index, snapshots])
-
-  useEffect(() => {
-    if (playing && snapshots && index >= 0 && breakpoints.has(snapshots[index].line)) {
-      setPlaying(false)
-    }
-  }, [index, playing, snapshots, breakpoints])
-
-  useEffect(() => {
-    if (!dragging) return
-    function onMove(e: MouseEvent) {
-      const el = document.querySelector('.main') as HTMLElement | null
-      if (!el) return
-      const r = el.getBoundingClientRect()
-      const pct = ((e.clientX - r.left) / r.width) * 100
-      setEditorPct(Math.min(80, Math.max(15, pct)))
-    }
-    function onUp() {
-      setDragging(false)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    document.body.style.userSelect = 'none'
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      document.body.style.userSelect = ''
-    }
-  }, [dragging])
-
-  function onDividerMouseDown(e: React.MouseEvent) {
-    e.preventDefault()
-    setDragging(true)
-  }
-
-  function onCinDividerMouseDown(e: React.MouseEvent) {
-    e.preventDefault()
-    setHDragKind('code-cin')
-  }
-
-  function onOutDividerMouseDown(e: React.MouseEvent) {
-    e.preventDefault()
-    setHDragKind('cin-out')
-  }
-
-  useEffect(() => {
-    if (!hDragKind) return
-    function onMove(e: MouseEvent) {
-      const el = document.querySelector('.left-body') as HTMLElement | null
-      if (!el) return
-      const r = el.getBoundingClientRect()
-      const pctFromTop = ((e.clientY - r.top) / r.height) * 100
-      if (hDragKind === 'cin-out') {
-        const hi = Math.min(60, 92 - codePct)
-        setOutPct(Math.min(hi, Math.max(8, 100 - pctFromTop)))
-      } else {
-        const hi = Math.min(80, 92 - outPct)
-        setCodePct(Math.min(hi, Math.max(10, pctFromTop)))
-      }
-    }
-    function onUp() {
-      setHDragKind(null)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    document.body.style.userSelect = 'none'
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      document.body.style.userSelect = ''
-    }
-  }, [hDragKind, codePct, outPct])
 
   useEffect(() => {
     const el = leftBodyRef.current
@@ -291,153 +107,53 @@ export default function App() {
       if (e.key === ' ') {
         if (el && el.tagName === 'BUTTON') return
         e.preventDefault()
-        togglePlay()
+        player.togglePlay()
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
-        stepForward()
+        player.stepForward()
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
-        stepBack()
+        player.stepBack()
       } else if (e.key === 'r' || e.key === 'R') {
-        reset()
+        player.reset()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const cur = snapshots && index >= 0 ? snapshots[index] : null
-  const activeLine = cur ? cur.line : -1
-
-  let outputText = '(尚未运行)'
-  let outputIsError = false
-  if (cur) {
-    if (cur.error) {
-      outputText = cur.error
-      outputIsError = true
-    } else {
-      outputText = cur.output || '(无输出)'
-    }
-  } else if (error) {
-    outputText = error
-    outputIsError = true
-  }
+  const view = outputView(player.cur, player.error)
 
   return (
     <div className="app">
-      <div className="topbar">
-        <span className="brand">
-          <span className="logo">OI</span> 代码可视化
-        </span>
-        <select
-          className="preset-select"
-          value=""
-          onChange={(e) => {
-            const p = PRESETS.find((x) => x.name === e.target.value)
-            if (p) onCodeChange(p.code)
-          }}
-          title="载入示例"
-        >
-          <option value="" disabled>
-            示例…
-          </option>
-          {PRESETS.map((p) => (
-            <option key={p.name} value={p.name}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <button className="btn primary" onClick={togglePlay}>
-          {playing ? '⏸ 暂停' : '▶ 运行'}
-        </button>
-        <button className="btn" onClick={stepForward} disabled={playing}>
-          ⏭ 单步
-        </button>
-        <button className="btn" onClick={stepBack} disabled={playing || !snapshots}>
-          ⏮ 后退
-        </button>
-        <button className="btn" onClick={reset}>
-          ⟲ 重置
-        </button>
-        <div className="speed-control" title="播放速度（每步间隔）">
-          <input
-            type="range"
-            min={50}
-            max={2000}
-            step={50}
-            value={speed}
-            onChange={(e) => setSpeed(Number(e.target.value))}
-            className="speed-slider"
-          />
-          <span className="speed-label">{speed}ms</span>
-        </div>
-        <span className="spacer" />
-        <div className="cond-toggle">
-          <button className="btn" onClick={() => setCondMenuOpen((o) => !o)}>
-            设置 ▾
-          </button>
-          {condMenuOpen && (
-            <div className="cond-menu">
-              <div className="cond-menu-hint">运行前设置，改动后需重新运行</div>
-              <label>
-                <input type="checkbox" checked={showIf} onChange={(e) => changeShow('if', e.target.checked)} />
-                if 判断
-              </label>
-              <label>
-                <input type="checkbox" checked={showWhile} onChange={(e) => changeShow('while', e.target.checked)} />
-                while 判断
-              </label>
-              <label>
-                <input type="checkbox" checked={showFor} onChange={(e) => changeShow('for', e.target.checked)} />
-                for 判断
-              </label>
-              <label>
-                <input type="checkbox" checked={boolAsInt} onChange={(e) => changeBoolAsInt(e.target.checked)} />
-                bool 输出 1/0
-              </label>
-              <div className="cond-menu-hint">编辑器</div>
-              <div className="indent-choice">
-                <span>Tab 缩排</span>
-                {INDENT_SIZES.map((s) => (
-                  <button
-                    key={s}
-                    className={indentSize === s ? 'on' : ''}
-                    onClick={() => changeIndentSize(s)}
-                    title={'按 Tab 缩排 ' + s + ' 格'}
-                  >
-                    {s} 格
-                  </button>
-                ))}
-              </div>
-              <div className="cond-menu-note">
-                整行加减缩排：Tab / Shift-Tab，或 Ctrl+] / Ctrl+[
-              </div>
-            </div>
-          )}
-        </div>
-        <span className="step-badge">
-          {snapshots && index >= 0 ? '第 ' + (index + 1) + ' / ' + snapshots.length + ' 步' : '未运行'}
-        </span>
-        <div className="jump-control">
-          <span className="jump-label">跳到</span>
-          <input
-            type="number"
-            className="jump-input"
-            min={1}
-            max={snapshots ? snapshots.length : 1}
-            placeholder="步"
-            value={jumpVal}
-            disabled={!snapshots}
-            onChange={(e) => setJumpVal(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') doJump()
-            }}
-          />
-          <button className="btn btn-sm" onClick={doJump} disabled={!snapshots}>
-            跳转
-          </button>
-        </div>
-      </div>
+      <Topbar
+        playing={player.playing}
+        canBack={!!player.snapshots}
+        canJump={!!player.snapshots}
+        maxStep={player.snapshots ? player.snapshots.length : 1}
+        stepLabel={player.stepLabel}
+        speed={player.speed}
+        jumpVal={player.jumpVal}
+        showIf={showIf}
+        showWhile={showWhile}
+        showFor={showFor}
+        boolAsInt={boolAsInt}
+        indentSize={indentSize}
+        onPickPreset={(name) => {
+          const p = PRESETS.find((x) => x.name === name)
+          if (p) onCodeChange(p.code)
+        }}
+        onTogglePlay={player.togglePlay}
+        onStepForward={player.stepForward}
+        onStepBack={player.stepBack}
+        onReset={player.reset}
+        onSpeedChange={player.setSpeed}
+        onShowChange={changeShow}
+        onBoolAsIntChange={changeBoolAsInt}
+        onIndentSizeChange={changeIndentSize}
+        onJumpValChange={player.setJumpVal}
+        onJump={player.doJump}
+      />
 
       <div className="main">
         <div className="editor-pane" style={{ flex: '0 0 ' + editorPct + '%' }}>
@@ -445,15 +161,15 @@ export default function App() {
           <div className="left-body" ref={leftBodyRef}>
             <div className="editor-body" style={{ height: availH * codePct / 100 }}>
               <CodeEditor
-            value={code}
-            onChange={onCodeChange}
-            activeLine={activeLine}
-            breakpoints={breakpoints}
-            onToggleBreakpoint={toggleBreakpoint}
-            indentSize={indentSize}
-          />
+                value={code}
+                onChange={onCodeChange}
+                activeLine={player.activeLine}
+                breakpoints={player.breakpoints}
+                onToggleBreakpoint={player.toggleBreakpoint}
+                indentSize={indentSize}
+              />
             </div>
-            <div className="divider-h" onMouseDown={onCinDividerMouseDown} title="拖动调整代码框高度" />
+            <Splitter orientation="horizontal" onMouseDown={hDrag.onCodeDividerMouseDown} title="拖动调整代码框高度" />
             <div className="cin-pane" style={{ height: availH * cinPct / 100 }}>
               <div className="cin-pane-title">cin 输入</div>
               <textarea
@@ -463,14 +179,11 @@ export default function App() {
                 placeholder="预填 cin 输入，支持空格/换行分隔"
               />
             </div>
-            <div className="divider-h" onMouseDown={onOutDividerMouseDown} title="拖动调整 cin / 输出高度" />
-            <div className="output-pane" style={{ height: availH * outPct / 100 }}>
-              <div className="output-pane-title">输出</div>
-              <pre className={outputIsError ? 'error' : ''}>{outputText}</pre>
-            </div>
+            <Splitter orientation="horizontal" onMouseDown={hDrag.onOutDividerMouseDown} title="拖动调整 cin / 输出高度" />
+            <OutputPane view={view} height={availH * outPct / 100} />
           </div>
         </div>
-        <div className="divider" onMouseDown={onDividerMouseDown} />
+        <Splitter orientation="vertical" onMouseDown={vDrag.onMouseDown} />
         <div className="viz-pane">
           <div className="pane-title">
             变量 / 数据结构
@@ -482,7 +195,7 @@ export default function App() {
             </span>
           </div>
           <ErrorBoundary label="panel" resetKey={code}>
-            <VariablesPanel snapshot={cur} />
+            <VariablesPanel snapshot={player.cur} />
           </ErrorBoundary>
         </div>
       </div>

@@ -19,6 +19,12 @@
     - `interpreter.ts` 933 → **113 行**（累計 2930 → 113，**−96%**），只剩 `run()` + `export type { CallNode, RunOptions, Snapshot }` + `export { RuntimeError }`。**公開面完全沒變**（App / 面板 / 36 個測試檔的 import 一行都不用改）。
     - **驗證**：`npm run build` ✅（built in 218ms）、`npm test` **36/36 全過**（含 31 個 golden 特性化案例 —— 每一帧 digest 一字不差，代表搬檔是 0 行為差異）、`tsc --noEmit` **仍 31**（與搬檔前逐條相同，全是既有的 Cell/Expr 窄化錯誤，S8 處理）。
     - **踩坑**：改寫檔頭時**只幫 `run()` 匯入了 runtime/snapshot/core 三個模組**，漏了它還用到的 `Program`（ast）/ `Memory`（memory）/ `toStringVal`（values）→ tsc 由 31 變 36。修法：檔頭的 import 產生器要**對所有下層模組都跑一次**（`importsOf` 只匯出真正用到的名字，沒用到的模組自然不產生 import），改完就回到 31。腳本：`tmp/s6.mjs`。
+  - **S7**：`App.tsx` **493 → 206 行**，拆成四個模組（都在 `src/components/`）：
+    - `usePlayer.ts`（187 行）：`usePlayer({ code, input, showIf, showWhile, showFor, boolAsInt })` → **播放器全部狀態與動作** —— `snapshots` / `index` / `playing` / `speed` / `error` / `breakpoints` / `jumpVal`、`collect` / `start` / `stepForward` / `stepBack` / `reset` / `togglePlay` / `doJump` / `toggleBreakpoint`，以及三個 effect（播放計時器、跑到底自動暫停、**撞到斷點自動暫停**）。另外收斂出 `invalidate()`（改程式碼／改 cin／改顯示開關都要讓舊快照失效 —— v0.5.2 的 bug 就是漏了其中一條）。
+    - `Topbar.tsx`（150 行）：標題、示例下拉、執行控制、速度滑桿、**設定選單（顯示開關 + Tab 縮排）**、步數與跳步；`menuOpen` 是純 UI 狀態所以留在這裡。
+    - `Splitter.tsx`（100 行）：`<Splitter orientation="vertical|horizontal">` + `useVerticalDrag`（左右）+ `useStackDrag`（程式碼／cin／輸出三段的上下夾制）。
+    - `OutputPane.tsx`（31 行）：面板本體 + **純函式 `outputView(cur, error)`**（執行期錯誤 > 這一步的輸出 > 解析錯誤 > 「尚未執行」）—— 以前這段 if/else 埋在元件裡，node 端測不到。
+    - **新增測試 `test/appshell-test.ts`（23 項）**：`outputView` 五個分支 + 真快照 + 11 條原始碼契約（`setInterval` 不能在 App、`cond-menu` 不能在 App、App 不能有裸的 `className="divider"`、App ≤ 260 行…）+ **用 `react-dom/server` 把整個 `<App/>` 渲染一次**（拆完最容易斷的是接線）。順手修了 `editor-setup-test` 裡「設定選單在 App」的假設（JSX 搬去 Topbar，接線留在 App）。
 - 2026-08-17：**v0.10.0 —— 解耦重構（第一批）：`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/` 五個模組，並去掉一份複製**。
   - **起因**：使用者問「整個專案有沒有需要對/解耦的地方？方便後續更新」。
   - **盤點**（寫進新增的 `ARCHITECTURE.md`）：`interpreter.ts` **2930** / `parser.ts` 1019 / `index.css` 715 / `App.tsx` 493（**單一 480 行元件**）/ `VariablesPanel.tsx` 1983。

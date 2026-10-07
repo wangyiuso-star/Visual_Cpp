@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — 專案結構與解耦計畫
 
 > 2026-08-17 起盤點，之後每完成一個重構步驟就更新這一份（進度見 §4）。每一輪功能都往同幾個檔案裡塞，這份是「現在長什麼樣、哪裡該拆、為什麼」。
-> 原則：**先抽出可測的純函式，再搬檔案**；每次搬完一定要 `npm test`（36 個測試檔會把所有 preset 的每一個畫面都渲染一次，是搬檔案的安全網）。
+> 原則：**先抽出可測的純函式，再搬檔案**；每次搬完一定要 `npm test`（37 個測試檔會把所有 preset 的每一個畫面都渲染一次，是搬檔案的安全網）。
 
 ## 1. 現況（v0.10.0 + 重構 S0–S6）
 
@@ -13,7 +13,7 @@
 | `src/index.css` | 715 | 全部樣式 |
 | `src/interpreter/values.ts` | 634 | 值轉換與比較的純函式（`num`/`coerceTo`/`cmp`/`applyBinary`/`toStringVal`/`formatDouble`…）—— S2 抽出 |
 | `src/components/viz/tree.tsx` | 534 | 樹 / BST / 堆 / 呼叫樹 + 共用縮放視口 |
-| `src/App.tsx` | 493 | 主殼：**一個 480 行的 App 元件**（播放、鍵盤、分割、持久化、topbar、輸出面板全在裡面） |
+| `src/App.tsx` | **206** | 主殼：只負責版面與接線（播放/單步在 `usePlayer`、工具列在 `Topbar`、輸出在 `OutputPane`、分割線在 `Splitter`）—— S7 從 493 行拆下來 |
 | `src/components/VariablesPanel.tsx` | 487 | 面板外殼（卡片、拖動、縮放、全寬）—— v0.10.0 從 1983 行拆下來的 |
 | `src/components/viz/window.tsx` | 334 | 一維／二維／struct 矩陣視窗 + 共用的 `useWindowOffset` |
 | `src/components/viz/containers.tsx` | 310 | string / stack / queue / deque / set / map / struct / pair 檢視 |
@@ -46,8 +46,15 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 
 仍然可以再拆的：`core.ts` 826 行裡的 `execCall`（函式呼叫與參數綁定）和 `sizeofOperand` / `applyStructInit` 都是獨立的主題，等它再變胖再說。
 
-### (B) `App.tsx`：一個 480 行的元件
-建議抽成：`usePlayer()`（collect / start / step / 播放計時 / 斷點 / 跳步）、`Topbar`（約 120 行 JSX）、`Splitter`（拖拽分割）、`OutputPane`。價值是**以後改 UI 不用在 480 行裡找位置**；風險低（App 這層本來就沒有自動化測試，只靠 build + 手動驗）。
+### (B) `App.tsx` —— **已做完（S7）**，493 → 206 行
+| 新模組 | 行數 | 內容 |
+|---|---|---|
+| `components/usePlayer.ts` | 187 | 播放器狀態與動作（collect / start / step / play / reset / jump / 斷點）+ 三個 effect + `invalidate()` |
+| `components/Topbar.tsx` | 150 | 工具列 JSX（執行控制、速度、設定選單、步數、跳步） |
+| `components/Splitter.tsx` | 100 | `<Splitter>` + `useVerticalDrag` + `useStackDrag` |
+| `components/OutputPane.tsx` | 31 | 輸出面板 + 純函式 `outputView()` |
+
+**這層現在也有自動化測試了**：`test/appshell-test.ts`（23 項）包含用 `react-dom/server` 把整個 `<App/>` 渲染一次（以前只靠 build + 手動開瀏覽器）。
 
 ### (C) 31 個既有的 TypeScript 型別錯誤（`tsc --noEmit`）
 `npm run build` 只跑 vite（rolldown 會剝掉型別、**不做型別檢查**），所以這些錯誤不會擋住建置，但會蓋掉「新增的型別錯誤」。目前幾乎都是同一類：`Cell` 是聯合型別，存取 `.cells` / `.elemType` 前沒有先窄化（`ref` 這種 Cell 沒有那兩個欄位）。
@@ -74,7 +81,7 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 **驗證三層**：
 1. `test/interp-golden-test.ts` —— **特性化 golden**：把 31 個代表性程式的「每一帧 digest」整體雜湊錄下來。
    重構不該改變任何行為，digest 一變就是搬檔時動到了什麼。要**刻意**改行為時：`UPDATE_GOLDEN=1 node test/interp-golden.mjs` 重錄，並在 commit message 說明為什麼。
-2. 既有 36 個測試檔 —— 語意與渲染（`render-test` / `hkoi-presets-test` 會把所有 preset 的每一幀渲染成 HTML）。
+2. 既有 37 個測試檔 —— 語意與渲染（`render-test` / `hkoi-presets-test` 會把所有 preset 的每一幀渲染成 HTML）。
 3. `node_modules/.bin/tsc.cmd --noEmit` —— 目前 31 個既有錯誤（見 §2C），S8 會清掉並納入流程。
 
 | 步驟 | 內容 | 檔案 | 驗證 |
@@ -86,7 +93,7 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 | **S4** | 抽出 `interpreter/builtins.ts`：`execCall` 裡的**全部內建**（sort / 數學 / stoi / 字串與容器方法 / memset / sizeof / fill…）—— 最大的一塊 | 新檔 + `interpreter.ts` | golden |
 | **S5** ✅ | 抽出 `interpreter/snapshot.ts`（157 行）：`dumpAll` / `collectLocals` / `updateActiveLocals` / `mark` / `markCondition` / `formatCellValue` + 呼叫樹工具。**原計畫的 `stmts.ts` 併進 S6** —— 它和求值互相遞迴，單獨拆會循環 import | 新檔 + `interpreter.ts` | golden ✅（`d9cb389`） |
 | **S6** ✅ | 抽出 `interpreter/core.ts`（826 行）：`sizeofOperand` / `applyStructInit` / `resolveTarget` / `evalExpr` / `execAssign` / `execUpdate` / `execCall` / `execMethodCall` / `execDecl` / `execBlock` / `cinReadTargets` / `execStmt`（**求值 + 敘述 + 呼叫同檔**，理由見 §2A）。`interpreter.ts` 933 → **113 行**，只剩 `run()` + 型別轉出 | 新檔 + `interpreter.ts` | golden ✅（31 檔全過、`tsc` 仍 31） |
-| **S7** | `App.tsx` 拆出 `usePlayer()`（collect / 播放 / 斷點 / 跳步）/ `Topbar` / `Splitter` / `OutputPane` | 新檔 + `App.tsx` | `npm test` + 手動開 dev |
+| **S7** ✅ | `App.tsx` 493 → 206 行：`usePlayer.ts`（187）/ `Topbar.tsx`（150）/ `Splitter.tsx`（100）/ `OutputPane.tsx`（31，含純函式 `outputView`）。新增 `test/appshell-test.ts`（23 項，含整個 `<App/>` 的 SSR 渲染煙霧測試） | 4 新檔 + `App.tsx` | 37 檔全過 ✅ + tsc 仍 31 + dev server 五個新模組都 200 |
 | **S8** | `memory.ts` 加 `asSeq()` / `elemTypeOf()` 等窄化工具，清掉 31 個型別錯誤；`package.json` 加 `typecheck` 腳本並在發版流程跑它 | `memory.ts`、各檔、`package.json` | `tsc --noEmit` = 0 |
 | **S9** | 測試樣板抽 `test/_helpers.ts`（`check` / `eq` / `err` / `run1`） | `test/*.ts` | `npm test` 全過 |
 
