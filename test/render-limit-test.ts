@@ -83,11 +83,16 @@ check('501×501 的 DP 表会说明原因', (graphTooBigReason(501, 501 * 501) ?
 // 注：SSR 量不到宽度，useFit 会退回最小值，所以「有没有自适应」在 node 端渲染是分辨不出来的 ——
 // 这里改用源码契约把它锁住：2D 的两张视窗（Windowed2D / StructArrayView）不准再套 useFit。
 {
-  const panelSrc = readFileSync('src/components/VariablesPanel.tsx', 'utf8')
-  check('2D 视窗大小是 5', /const WIN_2D = 5\b/.test(panelSrc))
-  check('2D 视窗不跟着宽度变（没有 useFit(WIN_2D, …)）', !/useFit\(WIN_2D/.test(panelSrc))
-  check('1D 视窗仍然是自适应的（窄卡片才不会把阵列挤成两行）', /useFit\(WIN_1D/.test(panelSrc))
-  check('写入时仍会自动跳转（focus 跟随逻辑还在）', /if \(fr < r \|\| fr >= r \+ WIN_2D\)/.test(panelSrc))
+  // 这些视窗逻辑 v0.10.0 搬到 src/components/viz/ 了：
+  // WIN_1D/WIN_2D 这些常数在 format.ts，视窗元件与 focus 跟随在 window.tsx
+  const windowSrc = readFileSync('src/components/viz/window.tsx', 'utf8')
+  const formatSrc = readFileSync('src/components/viz/format.ts', 'utf8')
+  check('2D 视窗大小是 5', /WIN_2D = 5\b/.test(formatSrc))
+  check('2D 视窗不跟着宽度变（没有 useFit(WIN_2D, …)）', !/useFit\(WIN_2D/.test(windowSrc))
+  check('1D 视窗仍然是自适应的（窄卡片才不会把阵列挤成两行）', /useFit\(WIN_1D/.test(windowSrc))
+  check('写入时仍会自动跳转（focus 跟随逻辑还在）', /if \(fr < r \|\| fr >= r \+ winRows\)/.test(windowSrc))
+  // 二维矩阵与 struct 矩阵共用同一套偏移逻辑（v0.10.0 去重；以前是两份复制，改一处要记得改另一处）
+  check('两个矩阵视窗共用 useWindowOffset（没有再复制一份）', (windowSrc.match(/useWindowOffset\(rows, maxCols, focus/g) || []).length === 2)
 }
 
 console.log('==== render-limit-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')

@@ -94,11 +94,14 @@ fib 递归、阶乘递归、二分查找、二叉搜索树、全排列 dfs、归
 ## 目录结构
 
 - `src/interpreter/` — 迷你 C++ 解释器：lexer → parser → ast → interpreter（生成器式逐步执行）+ memory（递归 Cell 模型 + 写时复制结构共享）
-- `src/components/` — CodeEditor（CodeMirror + 当前行高亮 + 断点 gutter）、VariablesPanel（各类数据结构可视化）
+- `src/components/` — CodeEditor（CodeMirror + 当前行高亮 + 断点 gutter）、VariablesPanel（面板外壳：卡片、拖动排序、缩放、全宽）
+- `src/components/viz/` — 各类可视化视图：`format`（纯函数）、`window`（1D/2D/struct 矩阵视窗）、`containers`、`graph`、`tree`
 - `src/App.tsx` — 主壳（布局、步进控制、快捷键、预设、localStorage）
 - `src/index.css` — 样式
 - `src/presets.ts` — 预设示例
 - `test/` — 解释器 / 渲染层测试（`npm test`，31 个测试档；相容性矩阵在 `compat-test.ts`，本轮新功能在 `gap-test.ts`）
+
+> 结构盘点与后续的解耦计划见 **`ARCHITECTURE.md`**。
 
 ## 架构要点
 

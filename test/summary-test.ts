@@ -1,7 +1,8 @@
 import { parse } from '../src/interpreter/parser'
 import { run } from '../src/interpreter/interpreter'
 import { PRESETS } from '../src/presets'
-import { formatCellShort } from '../src/components/VariablesPanel'
+// 抽出來之後可以直接從純函式模組匯入，不必 import 整個 React 元件
+import { formatCellShort } from '../src/components/viz/format'
 
 // 容器当值时的「一行摘要」：set 元素、map 的键/值、struct 成员、pair 成员、
 // stack/queue/deque 的元素……这裡以前一律显示 '?'（使用者回报：map 的值是 vector 时画面上是 '?'）。

@@ -275,7 +275,7 @@ for (const p of PRESETS) {
   const css = readFileSync('src/index.css', 'utf8')
   check('网格用 auto-fill 自动并排（不是写死两列/单列）', /grid-template-columns:\s*repeat\(auto-fill/.test(css))
   check('窄屏也是 auto-fill（不再硬退成单列）', (css.match(/grid-template-columns:\s*repeat\(auto-fill/g) || []).length >= 2)
-  check('一维视窗才自适应（useFit(WIN_1D)）', /useFit\(WIN_1D/.test(readFileSync('src/components/VariablesPanel.tsx', 'utf8')))
+  check('一维视窗才自适应（useFit(WIN_1D)）', /useFit\(WIN_1D/.test(readFileSync('src/components/viz/window.tsx', 'utf8')))
   const panelSrc = readFileSync('src/components/VariablesPanel.tsx', 'utf8')
   check('面板会量自己的宽度（决定树要不要占整行）', /panelW/.test(panelSrc) && /ResizeObserver/.test(panelSrc))
   const layoutSrc = readFileSync('src/components/panelLayout.ts', 'utf8')

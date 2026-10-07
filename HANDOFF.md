@@ -1,6 +1,15 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-08-17：**v0.10.0 —— 解耦重構（第一批）：`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/` 五個模組，並去掉一份複製**。
+  - **起因**：使用者問「整個專案有沒有需要對/解耦的地方？方便後續更新」。
+  - **盤點**（寫進新增的 `ARCHITECTURE.md`）：`interpreter.ts` **2930** / `parser.ts` 1019 / `index.css` 715 / `App.tsx` 493（**單一 480 行元件**）/ `VariablesPanel.tsx` 1983。
+  - **這輪做的**：
+    1. **拆檔**：`viz/format.ts`（純函式：格式化、命中判斷、型別標籤，**沒有 React 依賴**）、`viz/window.tsx`（1D/2D/struct 矩陣視窗）、`viz/containers.tsx`（string/stack/queue/deque/set/map/struct/pair）、`viz/graph.tsx`（圖）、`viz/tree.tsx`（樹與呼叫樹）。依賴是單向的 `panel → {tree, graph, containers, window} → format`，沒有循環 import。
+    2. **去重**：`Windowed2D` 與 `StructArrayView` 原本各有一份一模一樣的「偏移 + 跟隨讀寫 + 滑桿」邏輯（v0.9.7 改那兩份時得用 `replace_all` 才改得乾淨，就是這個味道）→ 共用 `useWindowOffset()`。
+    3. **測試不再為了測純函式而拉進整個元件**：`summary-test` 改成 `import { formatCellShort } from '../src/components/viz/format'`。
+  - **做法**（可重複）：先用 `tmp/outline.mjs` 列出每個 top-level 項目的行範圍 → `tmp/split.mjs` 按目的地切檔 → `tmp/exportify.mjs` 補 `export` → `tsc --noEmit` 找出缺的 import 補上 → `npm test`（35 檔全過）。**渲染層測試就是搬檔案的安全網**。
+  - **後續計畫**（詳見 `ARCHITECTURE.md`）：(A) `interpreter.ts` 切 `runtime` / `values` / `input` / `builtins`（**最高優先** —— 語言功能只會加、不會少）；(B) `App.tsx` 抽 `usePlayer` / `Topbar` / `Splitter` / `OutputPane`；(C) 31 個既有 `tsc --noEmit` 型別錯誤（幾乎都是 `Cell` 聯合型別沒先窄化，建議加 `asSeq()` / `elemTypeOf()` 一次清掉）；(D) 測試樣板抽 `test/_helpers.ts`；(E) `index.css` 暫不拆（有幾處刻意靠覆蓋順序運作）。
 - 2026-08-17：**v0.9.8 —— 遞歸樹與 2D array 卡片也可以並排（面板夠寬時自動）**。
   - **使用者原話**：「能不能把遞歸樹和 2D array 這些也做成能並排？可以設置固定大小，或者當我右邊比例/大小大於某個數值後才允許並排」。
   - **做法**：

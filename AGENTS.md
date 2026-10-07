@@ -90,6 +90,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.9.7 —— 2D 视窗固定 5×5
 - [x] 遞歸樹與 2D array 卡片也能並排 —— 已做（2D 卡片不再佔整行（視窗固定 5×5 後自然寬度只有 ~250px），移除「行長 > 12 就整行」；樹/BST/堆/呼叫樹改成**面板 ≥ `TREE_PACK_MIN = 800px` 才只佔一欄**，用 ResizeObserver 量 `.viz-body`；`isWide(layout, key, auto)` 手動優先（⤢/⤡ 按鈕永遠有效）＋放大 >100% 強制整行；移除 `shapeClass`，CSS 只留 `.card-wide`。panellayout +6、render-test 改寫 +3 契約；35 檔全過）
 - [x] 发布 v0.9.8 —— 树/2D 卡片并排（面板 ≥800px 自动）
+- [x] 解耦重構第一批 —— 已做（`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/{format,window,containers,graph,tree}`（依賴單向、無循環）；`Windowed2D`/`StructArrayView` 的視窗偏移共用 `useWindowOffset()`；測試改從純函式模組匯入。**盤點與後續計畫寫在 `ARCHITECTURE.md`**：下一個該拆的是 `interpreter.ts`（2930 行））
+- [x] 发布 v0.10.0 —— 解耦重構第一批 + ARCHITECTURE.md
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。
