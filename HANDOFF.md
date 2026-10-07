@@ -13,6 +13,8 @@
     - **循環依賴怎麼解**：內建函式要「求值」（`evalExpr`）與「取左值」（`resolveTarget`），但那兩個在核心、而核心又呼叫 builtins → 所以核心用 **`EvalCtx`** 把能力**注入**（`const evalCtx: EvalCtx = { evalExpr, resolveTarget }`），builtins 只依賴型別與純函式。`execCall` / `execMethodCall` 在 interpreter 裡只剩幾行的轉發。
     - `interpreter.ts` 2215 → **1078 行**（累計 2930 → 1078，**−63%**）。
   - S4 踩到的坑（都記在 commit 裡）：①我的字串切檔工具把**註解**算進前一個項目的範圍，害我以為 execCall 的最後一行是 `}` → 改用「往下找第一個 `}`」當邊界；②S2 當時把 import 區塊補在檔案**結尾**（ESM 匯入會被提升，所以編譯與測試都正常），S4 重建檔頭時順手清掉；③注入 `ctx` 的腳本一開始把參數插在 `rt` **前面**，與呼叫端 `(rt, ctx, …)` 對不上 → tsc 的 `Type 'Runtime' is missing … from type 'EvalCtx'` 一次抓出 6 處；④重建檔頭時漏了 `export type { Snapshot, CallNode, RunOptions }` 的轉出，害下游 8 個隱式 any、tsc 一次多 12 個錯誤（補回就回到 31）。
+  - **S5**：抽出 `src/interpreter/snapshot.ts`（157 行）—— 快照與呼叫樹工具：`dumpAll` / `collectLocals` / `updateActiveLocals` / `mark` / `markCondition` / `formatCellValue` + 呼叫樹的 `getVar` / `findCallNode` / `callPath` / `updateCallAt` / `cloneCallTree`。這些只依賴 Runtime 狀態與純函式（不求值），所以能獨立成檔，execStmt 每條敘述都會呼叫 `mark`。`interpreter.ts` 1078 → **933** 行。
+  - **S6 的設計決定（重要）**：`evalExpr` / `execStmt` / `execCall` 三者**互相遞迴**（evalExpr → execCall → execBlock → evalExpr），硬拆成三個檔必然循環 import。所以 S6 會把它們放在**同一個模組 `core.ts`**（求值 + 敘述 + 呼叫），而 `interpreter.ts` 只留 `run()`（公開入口）與型別轉出；依賴方向變成 `interpreter → core → {snapshot, builtins, cells, values, input, runtime}`，單向無循環。
 - 2026-08-17：**v0.10.0 —— 解耦重構（第一批）：`VariablesPanel.tsx` 1983 → 487 行，拆成 `src/components/viz/` 五個模組，並去掉一份複製**。
   - **起因**：使用者問「整個專案有沒有需要對/解耦的地方？方便後續更新」。
   - **盤點**（寫進新增的 `ARCHITECTURE.md`）：`interpreter.ts` **2930** / `parser.ts` 1019 / `index.css` 715 / `App.tsx` 493（**單一 480 行元件**）/ `VariablesPanel.tsx` 1983。
