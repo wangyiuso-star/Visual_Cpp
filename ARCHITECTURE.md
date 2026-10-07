@@ -1,21 +1,24 @@
 # ARCHITECTURE.md — 專案結構與解耦計畫
 
-> 2026-08-17（v0.10.0 時盤點）。每一輪功能都往同幾個檔案裡塞，這份是「現在長什麼樣、哪裡該拆、為什麼」。
-> 原則：**先抽出可測的純函式，再搬檔案**；每次搬完一定要 `npm test`（35 個測試檔會把所有 preset 的每一個畫面都渲染一次，是搬檔案的安全網）。
+> 2026-08-17 起盤點，之後每完成一個重構步驟就更新這一份（進度見 §4）。每一輪功能都往同幾個檔案裡塞，這份是「現在長什麼樣、哪裡該拆、為什麼」。
+> 原則：**先抽出可測的純函式，再搬檔案**；每次搬完一定要 `npm test`（36 個測試檔會把所有 preset 的每一個畫面都渲染一次，是搬檔案的安全網）。
 
-## 1. 現況（v0.10.0）
+## 1. 現況（v0.10.0 + 重構 S0–S6）
 
 | 檔案 | 行數 | 角色 |
 |---|---|---|
-| `src/interpreter/interpreter.ts` | **2930** | 直譯器核心 + **全部內建函式**（sort/stoi/字串方法/容器方法…）+ 陳述式執行 + cin 游標 |
+| `src/interpreter/builtins.ts` | 1044 | 全部內建（sort / 數學 / stoi / 字串與容器方法 / memset / sizeof / fill…）—— S4 抽出 |
 | `src/interpreter/parser.ts` | 1019 | 語法分析（含 typedef/#define/cast/comparator 等各種語法） |
+| `src/interpreter/core.ts` | **826** | 執行引擎：求值 `evalExpr` / 敘述 `execStmt` / 呼叫 `execCall`（三者互相遞迴，必須同檔）—— S6 抽出 |
 | `src/index.css` | 715 | 全部樣式 |
+| `src/interpreter/values.ts` | 634 | 值轉換與比較的純函式（`num`/`coerceTo`/`cmp`/`applyBinary`/`toStringVal`/`formatDouble`…）—— S2 抽出 |
 | `src/components/viz/tree.tsx` | 534 | 樹 / BST / 堆 / 呼叫樹 + 共用縮放視口 |
 | `src/App.tsx` | 493 | 主殼：**一個 480 行的 App 元件**（播放、鍵盤、分割、持久化、topbar、輸出面板全在裡面） |
 | `src/components/VariablesPanel.tsx` | 487 | 面板外殼（卡片、拖動、縮放、全寬）—— v0.10.0 從 1983 行拆下來的 |
 | `src/components/viz/window.tsx` | 334 | 一維／二維／struct 矩陣視窗 + 共用的 `useWindowOffset` |
 | `src/components/viz/containers.tsx` | 310 | string / stack / queue / deque / set / map / struct / pair 檢視 |
-| 其他 | ~600 | lexer / memory / ast / CodeEditor / panelLayout / editorSetup / graphLimit / ErrorBoundary / presets |
+| `src/interpreter/interpreter.ts` | **113** | 只剩 `run()`（公開入口）+ 公開型別轉出（`Snapshot` / `CallNode` / `RunOptions` / `RuntimeError`）—— 從 2930 行一路降到這裡 |
+| 其他 | ~900 | lexer(348) / memory(165) / snapshot(159) / ast(118) / runtime(118) / cells(77) / input(53) / CodeEditor / panelLayout / editorSetup / graphLimit / ErrorBoundary / presets |
 
 ### v0.10.0 做了什麼
 
@@ -28,17 +31,20 @@
 
 ## 2. 還沒做、建議排後面做的
 
-### (A) `interpreter.ts` 2930 行 ／ 97 個 function —— 優先度最高
-它是現在最大的檔案，而且**每次加語言功能都會動它**。建議切成：
-| 目標檔 | 內容 | 風險 |
-|---|---|---|
-| `interpreter/runtime.ts` | `Runtime` 介面、`RuntimeError`、`Snapshot`/`RunOptions` 型別、`MAX_STEPS`、`isIntegral` | 低（純型別與常數） |
-| `interpreter/values.ts` | 值轉換與比較：`num` / `coerceTo` / `cmp` / `eq` / `cellOrder` / `valueOrder` / `toStringVal` / `formatDouble` / `charCode` | 低（純函式） |
-| `interpreter/input.ts` | cin 游標（`readCinToken` / `readCinLine` / `cinReadTargets`）+ `getline` / `cin.ignore` | 低 |
-| `interpreter/builtins.ts` | `execCall` 裡全部內建（sort / 數學 / 字串 / stoi / 容器方法…，約 600 行） | 中（要共用 values 的函式與 Runtime） |
-| `interpreter/stmts.ts` | `execStmt` / `execDecl` / `execBlock` / 控制流 | 中 |
-| 留在 `interpreter.ts` | `run()`、函式呼叫與參數綁定、呼叫樹 | — |
-為什麼先做它：**它是唯一一個「不拆就會持續變胖」的檔案**（語言功能只會加、不會少），而且它的測試覆蓋最完整（35 個檔案幾乎都在跑它）。
+### (A) `interpreter.ts` —— **已做完（S0–S6）**，2930 → 113 行
+拆解結果（依賴方向單向，無循環 import）：
+
+```
+interpreter.ts  run() + 型別轉出
+      ↓
+   core.ts      求值 / 敘述 / 呼叫（三者互相遞迴 → 同一個檔）
+      ↓
+snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory / ast / lexer 更下層）
+```
+
+為什麼 `evalExpr` / `execStmt` / `execCall` 不能各拆一檔：`evalExpr → execCall → execBlock → evalExpr` 是**互相遞迴**的，硬拆一定要互相 import。硬拆的替代方案（把回呼當參數層層傳）會讓每個簽章都多兩個參數、可讀性反而變差，所以選擇「同一個檔、只依賴下層」。下一步的拆法若真的要拆，得先把三者的共同狀態集中成一個 context 物件再談。
+
+仍然可以再拆的：`core.ts` 826 行裡的 `execCall`（函式呼叫與參數綁定）和 `sizeofOperand` / `applyStructInit` 都是獨立的主題，等它再變胖再說。
 
 ### (B) `App.tsx`：一個 480 行的元件
 建議抽成：`usePlayer()`（collect / start / step / 播放計時 / 斷點 / 跳步）、`Topbar`（約 120 行 JSX）、`Splitter`（拖拽分割）、`OutputPane`。價值是**以後改 UI 不用在 480 行裡找位置**；風險低（App 這層本來就沒有自動化測試，只靠 build + 手動驗）。
@@ -68,7 +74,7 @@
 **驗證三層**：
 1. `test/interp-golden-test.ts` —— **特性化 golden**：把 31 個代表性程式的「每一帧 digest」整體雜湊錄下來。
    重構不該改變任何行為，digest 一變就是搬檔時動到了什麼。要**刻意**改行為時：`UPDATE_GOLDEN=1 node test/interp-golden.mjs` 重錄，並在 commit message 說明為什麼。
-2. 既有 35 個測試檔 —— 語意與渲染（`render-test` / `hkoi-presets-test` 會把所有 preset 的每一幀渲染成 HTML）。
+2. 既有 36 個測試檔 —— 語意與渲染（`render-test` / `hkoi-presets-test` 會把所有 preset 的每一幀渲染成 HTML）。
 3. `node_modules/.bin/tsc.cmd --noEmit` —— 目前 31 個既有錯誤（見 §2C），S8 會清掉並納入流程。
 
 | 步驟 | 內容 | 檔案 | 驗證 |
@@ -78,8 +84,8 @@
 | **S2** | 抽出 `interpreter/values.ts`：`num` / `coerceTo` / `cmp` / `eq` / `cellOrder` / `valueOrder` / `charCode` / `toStringVal` / `formatDouble` / `parseInputValue` / `scalarCmp` / `assertScalarRV` / `cellScalar` 等**純函式** | 新檔 + `interpreter.ts` | golden |
 | **S3** | 抽出 `interpreter/input.ts`：cin 游標（`readCinToken` / `readCinLine` / `skipInputSpace` / `inadequateInputMsg`）+ `cinReadTargets` + `getline` / `cin.ignore` 的部分 | 新檔 + `interpreter.ts` | golden |
 | **S4** | 抽出 `interpreter/builtins.ts`：`execCall` 裡的**全部內建**（sort / 數學 / stoi / 字串與容器方法 / memset / sizeof / fill…）—— 最大的一塊 | 新檔 + `interpreter.ts` | golden |
-| **S5** | 抽出 `interpreter/stmts.ts`：`execStmt` / `execDecl` / `execBlock` / `execAssign` / `execUpdate` / `resolveTarget`（含 `cin` 陳述式、控制流） | 新檔 + `interpreter.ts` | golden |
-| **S6** | 抽出 `interpreter/calls.ts`：函式呼叫與參數綁定、呼叫樹、`stableSortWithCmp` / `callComparator`；`interpreter.ts` 只剩 `run()` | 新檔 + `interpreter.ts` | golden |
+| **S5** ✅ | 抽出 `interpreter/snapshot.ts`（157 行）：`dumpAll` / `collectLocals` / `updateActiveLocals` / `mark` / `markCondition` / `formatCellValue` + 呼叫樹工具。**原計畫的 `stmts.ts` 併進 S6** —— 它和求值互相遞迴，單獨拆會循環 import | 新檔 + `interpreter.ts` | golden ✅（`d9cb389`） |
+| **S6** ✅ | 抽出 `interpreter/core.ts`（826 行）：`sizeofOperand` / `applyStructInit` / `resolveTarget` / `evalExpr` / `execAssign` / `execUpdate` / `execCall` / `execMethodCall` / `execDecl` / `execBlock` / `cinReadTargets` / `execStmt`（**求值 + 敘述 + 呼叫同檔**，理由見 §2A）。`interpreter.ts` 933 → **113 行**，只剩 `run()` + 型別轉出 | 新檔 + `interpreter.ts` | golden ✅（31 檔全過、`tsc` 仍 31） |
 | **S7** | `App.tsx` 拆出 `usePlayer()`（collect / 播放 / 斷點 / 跳步）/ `Topbar` / `Splitter` / `OutputPane` | 新檔 + `App.tsx` | `npm test` + 手動開 dev |
 | **S8** | `memory.ts` 加 `asSeq()` / `elemTypeOf()` 等窄化工具，清掉 31 個型別錯誤；`package.json` 加 `typecheck` 腳本並在發版流程跑它 | `memory.ts`、各檔、`package.json` | `tsc --noEmit` = 0 |
 | **S9** | 測試樣板抽 `test/_helpers.ts`（`check` / `eq` / `err` / `run1`） | `test/*.ts` | `npm test` 全過 |
