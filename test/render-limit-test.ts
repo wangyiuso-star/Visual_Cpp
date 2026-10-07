@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { parse } from '../src/interpreter/parser'
@@ -76,6 +77,17 @@ check('501×501 的 DP 表会说明原因', (graphTooBigReason(501, 501 * 501) ?
   // 每个元素会渲染成 .cell-wrap > .cell 两层，所以用 cell-wrap 数元素个数
   const shownItems = (h.match(/class="cell-wrap/g) || []).length
   check('大 set 只画 300 项（不会画 1000 项）', shownItems > 250 && shownItems <= 320, shownItems + ' 个元素')
+}
+
+// ---------- 2D 视窗固定 5×5（使用者要求：大小可预期，靠写入时自动跳转就够）----------
+// 注：SSR 量不到宽度，useFit 会退回最小值，所以「有没有自适应」在 node 端渲染是分辨不出来的 ——
+// 这里改用源码契约把它锁住：2D 的两张视窗（Windowed2D / StructArrayView）不准再套 useFit。
+{
+  const panelSrc = readFileSync('src/components/VariablesPanel.tsx', 'utf8')
+  check('2D 视窗大小是 5', /const WIN_2D = 5\b/.test(panelSrc))
+  check('2D 视窗不跟着宽度变（没有 useFit(WIN_2D, …)）', !/useFit\(WIN_2D/.test(panelSrc))
+  check('1D 视窗仍然是自适应的（窄卡片才不会把阵列挤成两行）', /useFit\(WIN_1D/.test(panelSrc))
+  check('写入时仍会自动跳转（focus 跟随逻辑还在）', /if \(fr < r \|\| fr >= r \+ WIN_2D\)/.test(panelSrc))
 }
 
 console.log('==== render-limit-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')

@@ -86,6 +86,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.9.5 —— Tab 縮排 4 格 + 加減縮排快捷鍵
 - [x] 多個變數並排（右側不再一張卡片一行）—— 已做（根因：`.viz-main` 在 ≤1440px 硬退成單欄 + 大部分卡片形狀寫死 `shape-horizontal`＝佔整行（一維陣列/字串/set/map/queue/deque 全都是）。修法：網格改 `repeat(auto-fill, minmax(360px,1fr))`、`shapeClass` 改成**預設一欄**（只有樹/堆/BST 與行長 > 12 的寬二維表佔整行）、新增 `useFit()` 讓 1D/2D/struct 視窗欄數跟著卡片寬度走（以前寫死 5/10 格，窄卡片會把陣列擠成兩行）。render-test +6 用 DOM 斷言卡片形狀）
 - [x] 发布 v0.9.6 —— 多个变量卡片并排
+- [x] 2D 視窗改回固定 5×5 —— 已做（使用者要可預期的大小 + 寫入自動跳轉就夠；`Windowed2D`/`StructArrayView` 拿掉 `useFit`／`winRows`／`cols` 回到 `WIN_2D = 5`，focus 跟隨保留。**1D 視窗仍自適應**（半寬卡片固定 10 格會把陣列擠成兩行）。render-limit-test +4 原始碼契約鎖住「不准再 useFit(WIN_2D」）
+- [x] 发布 v0.9.7 —— 2D 视窗固定 5×5
 
 ## 下一步
 1. 从待办里挑一项开始（建议：快照增量存储 或 set/map 容器）。

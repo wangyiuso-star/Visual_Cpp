@@ -908,15 +908,12 @@ function StructArrayView({
   judges: Set<string>
   focus: number[] | undefined
 }) {
-  // 行/列数跟着卡片实际宽度走（与 Windowed2D 同一套逻辑）
-  const { ref, cols } = useFit(WIN_2D, 26)
-  const winRows = Math.max(WIN_2D, Math.min(12, Math.ceil(cols * 0.7)))
   const cells = cell.kind === 'array' || cell.kind === 'vector' ? cell.cells : []
   const rows = cells.length
   const maxCols = rows > 0 && cells[0].kind === 'struct' ? cells[0].members.length : 0
 
-  const maxRowOff = Math.max(0, rows - winRows)
-  const maxColOff = Math.max(0, maxCols - cols)
+  const maxRowOff = Math.max(0, rows - WIN_2D)
+  const maxColOff = Math.max(0, maxCols - WIN_2D)
   const [off, setOff] = useState({ r: 0, c: 0 })
 
   useEffect(() => {
@@ -927,17 +924,17 @@ function StructArrayView({
       let r = Math.min(prev.r, maxRowOff)
       let c = Math.min(prev.c, maxColOff)
       let changed = false
-      if (fr < r || fr >= r + winRows) {
-        r = Math.max(0, Math.min(fr - Math.floor(winRows / 2), maxRowOff))
+      if (fr < r || fr >= r + WIN_2D) {
+        r = Math.max(0, Math.min(fr - Math.floor(WIN_2D / 2), maxRowOff))
         changed = true
       }
-      if (fc < c || fc >= c + cols) {
-        c = Math.max(0, Math.min(fc - Math.floor(cols / 2), maxColOff))
+      if (fc < c || fc >= c + WIN_2D) {
+        c = Math.max(0, Math.min(fc - Math.floor(WIN_2D / 2), maxColOff))
         changed = true
       }
       return changed ? { r, c } : prev
     })
-  }, [focus, maxRowOff, maxColOff, rows, maxCols, winRows, cols])
+  }, [focus, maxRowOff, maxColOff, rows, maxCols])
 
   if (rows === 0) {
     return (
@@ -950,14 +947,14 @@ function StructArrayView({
   const rStart = Math.min(off.r, maxRowOff)
   const cStart = Math.min(off.c, maxColOff)
   const rowIdxs: number[] = []
-  for (let i = rStart; i < Math.min(rStart + winRows, rows); i++) rowIdxs.push(i)
+  for (let i = rStart; i < Math.min(rStart + WIN_2D, rows); i++) rowIdxs.push(i)
   const colIdxs: number[] = []
-  for (let j = cStart; j < Math.min(cStart + cols, Math.max(maxCols, 1)); j++) colIdxs.push(j)
+  for (let j = cStart; j < Math.min(cStart + WIN_2D, Math.max(maxCols, 1)); j++) colIdxs.push(j)
 
   return (
-    <div ref={ref}>
+    <div>
       <div className="grid2d-row">
-        {rows > winRows && (
+        {rows > WIN_2D && (
           <div className="row-slider-wrap">
             <span className="window-dim">行</span>
             <input
@@ -1003,11 +1000,11 @@ function StructArrayView({
           })}
         </div>
       </div>
-      {maxCols > cols && (
+      {maxCols > WIN_2D && (
         <div className="window-control">
           <span className="window-dim">列</span>
           <input type="range" min={0} max={maxColOff} value={cStart} onChange={(e) => setOff((o) => ({ ...o, c: Number(e.target.value) }))} className="cell-slider" />
-          <span className="window-range">[{cStart}..{Math.min(cStart + cols, maxCols) - 1}] / 共 {maxCols}</span>
+          <span className="window-range">[{cStart}..{Math.min(cStart + WIN_2D, maxCols) - 1}] / 共 {maxCols}</span>
         </div>
       )}
     </div>
@@ -1875,16 +1872,14 @@ function Windowed2D({
   judges: Set<string>
   focus: number[] | undefined
 }) {
-  // 行/列数跟着卡片实际宽度走：宽卡片多显示几列，窄卡片少显示几列（才不会被挤成两行）。
-  // 行数跟着列数长一点（≈0.7 倍，5~12 行），免得宽卡片只显示 5 行、下面空一大片。
-  const { ref, cols } = useFit(WIN_2D, 26)
-  const winRows = Math.max(WIN_2D, Math.min(12, Math.ceil(cols * 0.7)))
+  // 视窗固定 5×5（使用者要的是「固定大小 + 写入时自动跳转」，不要跟着宽度变，
+  // 这样每张卡片看到的行列数是可预期的；卡住的是写入/读取的那一格会自动滚进视窗）。
   const rows = cell.kind === 'array' ? cell.size : cell.cells.length
   let maxCols = 0
   for (let i = 0; i < cell.cells.length; i++) maxCols = Math.max(maxCols, rowLen(cell.cells[i]))
 
-  const maxRowOff = Math.max(0, rows - winRows)
-  const maxColOff = Math.max(0, maxCols - cols)
+  const maxRowOff = Math.max(0, rows - WIN_2D)
+  const maxColOff = Math.max(0, maxCols - WIN_2D)
   const [off, setOff] = useState({ r: 0, c: 0 })
 
   useEffect(() => {
@@ -1895,29 +1890,29 @@ function Windowed2D({
       let r = Math.min(prev.r, maxRowOff)
       let c = Math.min(prev.c, maxColOff)
       let changed = false
-      if (fr < r || fr >= r + winRows) {
-        r = Math.max(0, Math.min(fr - Math.floor(winRows / 2), maxRowOff))
+      if (fr < r || fr >= r + WIN_2D) {
+        r = Math.max(0, Math.min(fr - Math.floor(WIN_2D / 2), maxRowOff))
         changed = true
       }
-      if (fc < c || fc >= c + cols) {
-        c = Math.max(0, Math.min(fc - Math.floor(cols / 2), maxColOff))
+      if (fc < c || fc >= c + WIN_2D) {
+        c = Math.max(0, Math.min(fc - Math.floor(WIN_2D / 2), maxColOff))
         changed = true
       }
       return changed ? { r, c } : prev
     })
-  }, [focus, maxRowOff, maxColOff, rows, maxCols, winRows, cols])
+  }, [focus, maxRowOff, maxColOff, rows, maxCols])
 
   const rStart = Math.min(off.r, maxRowOff)
   const cStart = Math.min(off.c, maxColOff)
   const rowIdxs: number[] = []
-  for (let i = rStart; i < Math.min(rStart + winRows, rows); i++) rowIdxs.push(i)
+  for (let i = rStart; i < Math.min(rStart + WIN_2D, rows); i++) rowIdxs.push(i)
   const colIdxs: number[] = []
-  for (let j = cStart; j < Math.min(cStart + cols, Math.max(maxCols, 1)); j++) colIdxs.push(j)
+  for (let j = cStart; j < Math.min(cStart + WIN_2D, Math.max(maxCols, 1)); j++) colIdxs.push(j)
 
   return (
-    <div ref={ref}>
+    <div>
       <div className="grid2d-row">
-        {rows > winRows && (
+        {rows > WIN_2D && (
           <div className="row-slider-wrap">
             <span className="window-dim">行</span>
             <input
@@ -1972,11 +1967,11 @@ function Windowed2D({
           })}
         </div>
       </div>
-      {maxCols > cols && (
+      {maxCols > WIN_2D && (
         <div className="window-control">
           <span className="window-dim">列</span>
           <input type="range" min={0} max={maxColOff} value={cStart} onChange={(e) => setOff((o) => ({ ...o, c: Number(e.target.value) }))} className="cell-slider" />
-          <span className="window-range">[{cStart}..{Math.min(cStart + cols, maxCols) - 1}] / 共 {maxCols}</span>
+          <span className="window-range">[{cStart}..{Math.min(cStart + WIN_2D, maxCols) - 1}] / 共 {maxCols}</span>
         </div>
       )}
     </div>
