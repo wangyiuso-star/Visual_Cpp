@@ -7,6 +7,7 @@ import OutputPane, { outputView } from './components/OutputPane'
 import { Splitter, useStackDrag, useVerticalDrag } from './components/Splitter'
 import { DEFAULT_INDENT_SIZE, normalizeIndentSize } from './components/editorSetup'
 import { usePlayer } from './components/usePlayer'
+import { EDITOR_PCT_MAX, EDITOR_PCT_MIN, twoColumnMinWidth } from './components/panelLayout'
 import { PRESETS } from './presets'
 
 const SAMPLE = '#include <bits/stdc++.h>\nusing namespace std;\n\nint fib(int n) {\n  if (n <= 1) return n;\n  return fib(n - 1) + fib(n - 2);\n}\n\nint main() {\n  cout << fib(5) << endl;\n  return 0;\n}\n'
@@ -46,8 +47,50 @@ export default function App() {
   const availH = Math.max(0, leftBodyHeight - 12)
 
   const player = usePlayer({ code, input, showIf, showWhile, showFor, boolAsInt })
-  const vDrag = useVerticalDrag(setEditorPct)
+  const vDrag = useVerticalDrag(setEditorPct, EDITOR_PCT_MIN, EDITOR_PCT_MAX)
   const hDrag = useStackDrag({ codePct, outPct, setCodePct, setOutPct })
+  const [packSignal, setPackSignal] = useState(0)
+  const [packHint, setPackHint] = useState<string | null>(null)
+
+  /**
+   * 「自動並排」：一鍵解掉三件擋住並排的事 ——
+   *   1. 樹 / 遞歸樹的「手動整行（⤢）」與「放大 >100%」：兩者都會讓 isWide() 無視面板寬度、永遠佔整行
+   *      （手動設定存在 localStorage，所以拖中線也沒用）→ 交給 VariablesPanel（packSignal）。
+   *   2. 右側面板不夠寬放不下兩欄 → 依「量到的實際寬度」把中線往左移。
+   *   3. 真的做不到（螢幕太窄 / 編輯器已到 15% 下限）→ 在標題列講清楚，不要靜默沒反應。
+   * 為什麼要重試：React 的 state 更新與版面重算是非同步的，所以每 40ms 重新量一次（最多 4 次）。
+   */
+  function autoPack() {
+    setPackHint(null)
+    setPackSignal((n) => n + 1)
+    let tries = 0
+    const step = () => {
+      const row = document.querySelector('.main') as HTMLElement | null
+      const rowW = row ? row.getBoundingClientRect().width : 0
+      if (rowW <= 0) return
+      const body = document.querySelector('.viz-body') as HTMLElement | null
+      const main = document.querySelector('.viz-main') as HTMLElement | null
+      if (!body || !main) {
+        // 還沒有任何卡片：先把右側留到六成，之後跑起來就有機會並排
+        setEditorPct((p) => (100 - p < 60 ? Math.min(p, 40) : p))
+        return
+      }
+      const cols = getComputedStyle(main).gridTemplateColumns.split(/\s+/).filter((s) => s.length > 0).length
+      if (cols >= 2) return
+      // 面板寬 = 卡片區寬 + 內距 + 純量欄；這個差值跟面板寬度無關，量一次就好
+      const chrome = Math.max(0, body.clientWidth - main.clientWidth)
+      const need = twoColumnMinWidth(window.innerWidth) + chrome + 12 + tries * 24
+      setEditorPct((p) => {
+        const panelW = (rowW * (100 - p)) / 100
+        if (panelW >= need) return p
+        return Math.max(EDITOR_PCT_MIN, Math.min(EDITOR_PCT_MAX, 100 - (need / rowW) * 100))
+      })
+      tries++
+      if (tries < 4) window.setTimeout(step, 40)
+      else setPackHint('螢幕不夠寬：面板已放到最大（編輯器 ' + EDITOR_PCT_MIN + '%），卡片區仍放不下两栏')
+    }
+    step()
+  }
 
   function onCodeChange(v: string) {
     setCode(v)
@@ -193,9 +236,17 @@ export default function App() {
               <span className="lg"><span className="swatch judge" />判断</span>
               <span className="lg"><span className="swatch write" />写入</span>
             </span>
+            <button
+              className="btn btn-sm pack-btn"
+              onClick={autoPack}
+              title="把右側面板調寬到卡片剛好兩欄並排，並把樹 / 遞歸樹的「整行」與放大重設"
+            >
+              ⇔ 自動並排
+            </button>
+            {packHint && <span className="pack-hint">{packHint}</span>}
           </div>
           <ErrorBoundary label="panel" resetKey={code}>
-            <VariablesPanel snapshot={player.cur} />
+            <VariablesPanel snapshot={player.cur} packSignal={packSignal} />
           </ErrorBoundary>
         </div>
       </div>

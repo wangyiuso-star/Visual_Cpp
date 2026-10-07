@@ -57,9 +57,11 @@ function arrange<T>(list: T[], order: string[], keyOf: (t: T) => string): T[] {
 // 找到与图同尺寸、名字像"距离"的伴随数组（用于把节点值画进圆圈）
 interface Props {
   snapshot: Snapshot | null
+  /** App 的「自動並排」按鈕每按一次就 +1：用來把樹 / 遞歸樹的手動整行與放大重設掉。 */
+  packSignal?: number
 }
 
-export default function VariablesPanel({ snapshot }: Props) {
+export default function VariablesPanel({ snapshot, packSignal = 0 }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   // 卡片布局（顺序 / 单卡缩放 / 全宽）持久化在 localStorage：老师排一次就固定下来。
@@ -87,6 +89,23 @@ export default function VariablesPanel({ snapshot }: Props) {
     roRef.current.observe(el)
   }, [])
   const treeAutoWide = treeAutoWideOf(panelW)
+  // 「自動並排」（見 App 的同一顆按鈕）：把樹 / BST / 堆 / 遞歸樹的『手動整行（⤢）』與
+  // 『放大 >100%』清掉 —— 這兩者都會讓 isWide() 無視面板寬度、永遠佔整行，是「拖寬了還是不並排」
+  // 最常見的原因。其他卡片的手動設定刻意不動。
+  useEffect(() => {
+    if (packSignal <= 0) return
+    setLayout((prev) => {
+      const keys = new Set<string>(['@calltree'])
+      for (const v of snapshot?.vars ?? []) if (isTreeLike(v.cell)) keys.add(v.name)
+      const wide = { ...prev.wide }
+      const zoom = { ...prev.zoom }
+      for (const k of keys) {
+        delete wide[k]
+        if (zoomOf(prev, k) > 1) delete zoom[k]
+      }
+      return { ...prev, wide, zoom }
+    })
+  }, [packSignal])
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
   useEffect(() => {

@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { check, report } from './_helpers'
 import {
+  EDITOR_PCT_MAX,
+  EDITOR_PCT_MIN,
   EMPTY_LAYOUT,
   TREE_PACK_MIN,
   isWide,
   treeAutoWideOf,
+  twoColumnMinWidth,
   ZOOM_MAX,
   ZOOM_MIN,
   clampZoom,
@@ -94,5 +97,23 @@ check('VariablesPanel 走 treeAutoWideOf（判斷只有一份）', vpSrc.indexOf
 check('呼叫端真的用了 treeAutoWide（不能傳死的 true）', vpSrc.indexOf("cardView('@calltree', true)") < 0 && vpSrc.indexOf('cardView(item.v.name, isTreeLike(item.v.cell) && treeAutoWide)') >= 0, '仍有人傳死的 true')
 check('樹類卡片是 isTreeLike && treeAutoWide', vpSrc.indexOf('isTreeLike(item.v.cell) && treeAutoWide') >= 0)
 check('呼叫樹卡片用 treeAutoWide', vpSrc.indexOf("cardView('@calltree', treeAutoWide)") >= 0)
+
+// ---------- 「⇔ 自動並排」按鈕（v0.11.2）----------
+// 使用者回報「把中線往左拖還是不會並排」：多半是卡片有「手動整行（⤢）」或「放大 >100%」
+// 存在 localStorage 裡 —— 這兩者會讓 isWide() 無視面板寬度。按鈕要做三件事：
+//   1. 清掉樹/遞歸樹的手動 wide 與 >100% 的縮放（VariablesPanel 收到 packSignal）
+//   2. 依量到的實際寬度把中線往左移，直到卡片區放得下兩欄
+//   3. 真做不到就顯示原因（不靜默）
+check('兩欄最小寬度：寬螢幕 = 2*360+12', twoColumnMinWidth(1920) === 732, String(twoColumnMinWidth(1920)))
+check('兩欄最小寬度：≤1440 用 300/10', twoColumnMinWidth(1440) === 610 && twoColumnMinWidth(1200) === 610)
+check('拖曳與自動並排共用同一組夾制（15%~80%）', EDITOR_PCT_MIN === 15 && EDITOR_PCT_MAX === 80)
+
+const appSrc = readFileSync('src/App.tsx', 'utf8')
+check('App 有「自動並排」按鈕', appSrc.indexOf('自動並排') >= 0 && appSrc.indexOf('twoColumnMinWidth(window.innerWidth)') >= 0)
+check('App 用 gridTemplateColumns 量「現在是幾欄」', appSrc.indexOf('gridTemplateColumns') >= 0)
+check('App 把 packSignal 傳給面板', appSrc.indexOf('packSignal={packSignal}') >= 0)
+check('中線拖曳與按鈕共用 EDITOR_PCT_MIN/MAX', appSrc.indexOf('useVerticalDrag(setEditorPct, EDITOR_PCT_MIN, EDITOR_PCT_MAX)') >= 0)
+check('App 做不到時會說明原因（packHint）', appSrc.indexOf('setPackHint(') >= 0 && appSrc.indexOf('packHint &&') >= 0)
+check('VariablesPanel 收到 packSignal 會清掉樹的手動整行與放大', vpSrc.indexOf('packSignal') >= 0 && vpSrc.indexOf('delete wide[k]') >= 0 && vpSrc.indexOf('isTreeLike(v.cell)') >= 0)
 
 report('panellayout-test')

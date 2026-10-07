@@ -46,6 +46,26 @@ export function treeAutoWideOf(panelW: number): boolean {
   return panelW <= 0 || panelW < TREE_PACK_MIN
 }
 
+// ---- 「自動並排」用的常數與算式（v0.11.2）----
+// 卡片區（.viz-main）是 CSS 的 repeat(auto-fill, minmax(L, 1fr))：
+//   寬螢幕 L=360 / gap=12；@media (max-width:1440px) 時 L=300 / gap=10（見 index.css）。
+// 兩欄就需要 2L+gap：732px（寬螢幕）/ 610px（窄螢幕）。
+export const EDITOR_PCT_MIN = 15
+export const EDITOR_PCT_MAX = 80
+
+export function gridMinCol(viewportW: number): number {
+  return viewportW <= 1440 ? 300 : 360
+}
+
+export function gridGap(viewportW: number): number {
+  return viewportW <= 1440 ? 10 : 12
+}
+
+/** 卡片區要放得下「兩欄」至少要多寬（px）。「自動並排」按鈕用它算右側面板要多大。 */
+export function twoColumnMinWidth(viewportW: number): number {
+  return gridMinCol(viewportW) * 2 + gridGap(viewportW)
+}
+
 // 这张卡片要不要占整行：
 //   1. 使用者手动按过 ⤢ / ⤡ → 以手动为准；
 //   2. 没手动过 → 看 auto（树/调用树在窄面板时才占整行）；

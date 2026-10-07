@@ -95,6 +95,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - [x] 发布 v0.10.0 —— 解耦重構第一批 + ARCHITECTURE.md
 - [x] 解耦重構第二批（S0–S9，每步一個 commit，方便回檔）—— 已做：`interpreter.ts` **2930 → 113 行**（拆成 `runtime` / `values` / `input` / `builtins`+`cells` / `snapshot` / `core`，依賴單向無循環）、`App.tsx` **493 → 206 行**（`usePlayer` / `Topbar` / `Splitter` / `OutputPane`）、**`tsc --noEmit` 31 → 0**（`npm run typecheck` 進發版流程，另有 `npm run verify`）、測試樣板抽 `test/_helpers.ts`。整個過程用 **31 個 golden 特性化案例**（每帧 digest 整體雜湊）鎖住行為：`test/interp-golden-test.ts`，要刻意改行為時 `UPDATE_GOLDEN=1` 重錄
 - [x] 发布 v0.11.0 —— 解耦重構第二批（S0–S9）+ 型別債清零 + 手冊 ARCHITECTURE.md
+- [x] 新增「⇔ 自動並排」按鈕（v0.11.2）—— 已做（使用者「拖中線還是不會並排、想要一顆按鈕」：**根因是 `wide`(⤢) 與 `zoom`>100% 存在 localStorage 裡，兩者都讓 `isWide()` 無視面板寬度**。按鈕 = 清掉樹/BST/堆/遞歸樹的手動 wide 與 >100% 放大 + 依量到的寬度把中線往左移到卡片區放得下兩欄（`twoColumnMinWidth`：732 / ≤1440px 時 610）+ 真做不到就顯示原因。headless Chrome 實測：1600 寬 面板 714→904、1 欄→2 欄、`pq` 與 `g` 同列；640 寬顯示「螢幕不夠寬」）
 - [x] 修「數據結構樹 / 遞歸樹沒辦法並排」—— 已做（v0.11.1。**兩個疊起來的 bug**：①v0.9.8 起 `treeAutoWide` 算出來卻沒用，呼叫端傳死的 `true` → 樹永遠佔整行；②面板寬度用 `useEffect([])+ref` 量，但第一帧沒掛 ref → `panelW` 永遠 0。修法：`cardView(..., treeAutoWide)` + **callback ref**（兩條分支都掛）+ 判斷抽成 `treeAutoWideOf()`。用 headless Chrome + CDP 在 2560/1920/1400 三種寬度實際量 DOM 驗證：2560 時遞歸樹與陣列、`pq` 與 `g` 同列；1400（面板 <800）刻意佔整行。契約測試 +11 鎖住這兩個形狀）
 
 ## 下一步
