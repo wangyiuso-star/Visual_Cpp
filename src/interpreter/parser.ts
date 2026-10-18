@@ -1,6 +1,6 @@
 import { tokenize, parseNumber } from './lexer'
 import type { Token } from './lexer'
-import type { Program, Stmt, Expr, VarDecl, Type, ScalarTypeName, CoutItem, InitExpr, FunctionDef, FunctionParam, StructDef } from './ast'
+import type { Program, Stmt, Expr, VarDecl, Type, ScalarTypeName, CoutItem, InitExpr, FunctionDef, FunctionParam, StructDef, SwitchCase } from './ast'
 
 export class ParseError extends Error {
   line: number
@@ -304,6 +304,7 @@ class Parser {
     }
     if (this.isOp('{')) return this.parseBlock()
     if (this.isIdent('if')) return this.parseIf()
+    if (this.isIdent('switch')) return this.parseSwitch()
     if (this.isIdent('for')) return this.parseFor()
     if (this.isIdent('while')) return this.parseWhile()
     if (this.isIdent('do')) return this.parseDo()
@@ -352,6 +353,41 @@ class Parser {
       els = this.parseStatement()
     }
     return { kind: 'if', line, cond, then, else: els }
+  }
+
+  /**
+   * switch (expr) { case c1: ... case c2: ... default: ... }
+   * 允许 case 标签叠在一起（`case 1: case 2: ...` 会各自成为一个空 body 的 case，
+   * 执行时天然 fallthrough 到下一条），也允许没有 default。
+   * 标签必须是常量表达式（C++ 的要求）；这里不特别校验，能求值即可。
+   */
+  parseSwitch(): Stmt {
+    const line = this.cur().line
+    this.next()
+    this.expectOp('(')
+    const subject = this.parseExpr()
+    this.expectOp(')')
+    this.expectOp('{')
+    const cases: SwitchCase[] = []
+    while (!this.isOp('}') && this.cur().type !== 'eof') {
+      if (this.isIdent('case')) {
+        const caseLine = this.cur().line
+        this.next()
+        const label = this.parseExpr()
+        this.expectOp(':')
+        cases.push({ line: caseLine, label, body: [] })
+      } else if (this.isIdent('default')) {
+        const caseLine = this.cur().line
+        this.next()
+        this.expectOp(':')
+        cases.push({ line: caseLine, label: null, body: [] })
+      } else {
+        if (cases.length === 0) throw new ParseError('switch 里的语句必须写在 case / default 之后', this.cur().line)
+        cases[cases.length - 1].body.push(this.parseStatement())
+      }
+    }
+    this.expectOp('}')
+    return { kind: 'switch', line, subject, cases }
   }
 
   parseWhile(): Stmt {

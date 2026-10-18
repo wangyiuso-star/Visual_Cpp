@@ -1,7 +1,7 @@
 # 语言子集参考（支持什么 / 不支持什么）
 
 > 本工具跑的是**自制的迷你 C++ 解释器**，不是真正的编译器。这份文件是「学生能写什么」的可执行规格说明。
-> 对应版本 **v0.12.0**。每一条「支持 / 不支持」都有测试锁定：
+> 对应版本 **v0.13.0**。每一条「支持 / 不支持」都有测试锁定：
 > - `test/compat-test.ts` —— 兼容性矩阵（`yes(...)` 可用且输出正确、`no(...)` 必须报错）
 > - `test/gap-test.ts` —— 缺口提案的逐項驗證
 > - `test/*-test.ts` —— 各特性的语义测试
@@ -19,7 +19,7 @@
 | vector | 1D / 2D / 多维 `vector<vector<int>> g(n, vector<int>(m))` / 邻接表 `vector<int> g[N]` | 迭代器遍历（只认固定搭配）、`vector<容器>` 的某些方法 |
 | 其他容器 | `stack` `queue` `deque` `priority_queue`（含 `greater<T>`）`tree` `bst` `set` `map` `unordered_map` `pair` | 自定义容器、`multiset`/`multimap` |
 | struct | 定义、成员读写、初始化、参数、返回值、放在 array/tree/vector 里 | 构造函数、成员函数、`struct` 嵌套自身（指针） |
-| 语句 | 声明、`=`/`+=`/`-=`/`*=`/`/=`/`%=`、`++`/`--`、`for`、range-for、`while`、`do-while`、`if-else`、`break`/`continue`、`return`、`cout`、`cin`、块 | `switch`、`goto`、逗号表达式（`for` 标头） |
+| 语句 | 声明、`=`/`+=`/`-=`/`*=`/`/=`/`%=`、`++`/`--`、`for`、range-for、`while`、`do-while`、`if-else`、`switch`（case/default/fallthrough）、`break`/`continue`、`return`、`cout`、`cin`、块 | `goto`、逗号表达式（`for` 标头） |
 | 函数 | 自订函数、递归、全局变量、引用 `int&`、`const T&`、数组形参 `int a[]`、容器按值参数、struct 参数/返回、容器返回 | 重载（同名两次 = 明确报错）、默认参数、lambda、模板、可变参数 |
 | 内建 | `min`/`max`/`abs`/`swap`/`sort`/`reverse`/`lower_bound`/`make_pair`、数学函数、`memset`/`fill`/`assign`、`stoi`…`to_string`、字元函数、`#define`/`typedef`/`using`、`sizeof`、三目 | `printf`、完整 `<iomanip>`、位运算内建 |
 | 运算符 | 算术、比较、逻辑 `&& || !`、三目 `?:`、复合赋值、camel cast `(int)x` | 位运算 `& | ^ << >> ~`、`++` 前缀/后缀都支持但**不能**对临时值用 |
@@ -78,7 +78,7 @@
 - `for (init; cond; incr)`、`while`、`do-while`、`if / else if / else`、`break`/`continue`、`return`。
 - **range-for**：`for (int x : v)` / `for (auto x : v)`（拷贝）/ `for (auto& x : v)`（引用，写回）。可迭代 array / vector / deque / set / map（元素 pair）/ string（元素 char）/ tree / bst。`stack`/`queue`/`priority_queue` 明确报错（C++ 也没有 begin/end）。
 - **条件显示**：`if`/`while`/`for` 的条件会以「判断」横幅显示并标出真假（可在设置菜单关掉某类，减少快照）。
-- **不支持**：`switch`、`goto`、`for` 标头的逗号表达式、lambda。
+- **不支持**：`goto`、`for` 标头的逗号表达式、lambda。
 
 ---
 
@@ -201,7 +201,7 @@ vector: size() empty() at(i) front() back() push_back(x) pop_back()
 | 迭代器遍历（`for (auto it = v.begin(); ...)`） | 只认固定搭配；给明确指引 |
 | `printf` / `scanf` | 只做 `cin/cout`，避免两套 I/O 的行为差异 |
 | 完整 `<iomanip>` | 只做 `fixed` + `setprecision` |
-| 函数重载、默认参数、lambda、`switch`、`goto`、`for` 逗号表达式 | 目前未做（`switch` 是最可能补的一个；见 `docs/AI-HANDOFF.md` §10） |
+| 函数重载、默认参数、lambda、`goto`、`for` 逗号表达式 | 目前未做（见 `docs/AI-HANDOFF.md` §10） |
 
 ---
 

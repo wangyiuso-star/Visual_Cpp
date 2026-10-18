@@ -3,7 +3,7 @@
 > **这份文件是写给「接手这个项目的下一个 AI 助手 / 下一个维护者」的。**
 > 它会随仓库一起提交（`docs/AI-HANDOFF.md`），所以内容按**公开可读**的标准写：不写会话内幕，只写现状、约定、怎么验证、哪里还不行。
 >
-> - 最后更新：2026-10-19（对应版本 **v0.12.0**）
+> - 最后更新：2026-10-19（对应版本 **v0.13.0**）
 > - 先读这一份；结构与设计细节见 [ARCHITECTURE.md](./ARCHITECTURE.md)，变更日志见 [HANDOFF.md](./HANDOFF.md)，已解决的疑难见 [DEBUG.md](./DEBUG.md)，语言子集细节见 [LANGUAGE-SUBSET.md](./LANGUAGE-SUBSET.md)
 
 ---
@@ -15,7 +15,7 @@
 | 是什么 | 浏览器内的 **C++ 代码逐步可视化**工具（OI / 算法教学用）：左边写 C++、右边实时画出变量/数组/容器/图/递归树，逐步高亮当前行与读写的格子 |
 | 形态 | **不是编译器、不是 GDB**：自己写的迷你解释器（lexer → parser → 生成器式 stepper）跑在浏览器里 |
 | 技术栈 | React 19 + Vite 8 + TypeScript + CodeMirror 6；无后端、无数据库 |
-| 规模 | `src/` 31 个文件 / 约 8000 行；`test/` 36 个测试文件 |
+| 规模 | `src/` 31 个文件 / 约 8000 行；`test/` 37 个测试文件 |
 | 跑起来 | `npm install` → `npm run dev` → http://localhost:5173 |
 | 三条命令 | `npm run dev`（开发）/ `npm test`（全部测试）/ `npm run verify`（typecheck + test + build，**提交前必跑**） |
 | 第一原则 | **宁可给出明确的错误，也绝不能静默给出错误答案**（详见 §5.1） |
@@ -45,7 +45,7 @@
 ```bash
 npm install
 npm run dev        # http://localhost:5173（Windows 也可以双击 start.bat）
-npm test           # 36 个测试文件：解释器语义 + 渲染层 + 面板布局 + golden
+npm test           # 37 个测试文件：解释器语义 + 渲染层 + 面板布局 + golden
 npm run verify     # typecheck + test + build，提交前必跑（目前全绿）
 ```
 
@@ -109,7 +109,7 @@ snapshot.ts   builtins.ts   cells.ts   values.ts   input.ts   runtime.ts
 | `graphLimit.ts` | 19 | 图规模闸门（节点 ≤ 80、边 ≤ 800） |
 | `App.tsx` | 257 | 主壳：版面、接缐、全局快捷键、**「⇔ 自动并排」** |
 | `index.css` | 718 | 全部样式（含窄屏/窄面板的 `@media`、`@container` 与卡片网格） |
-| `presets.ts` | 112 | 25 个课堂示例（cin 类自带 input） |
+| `presets.ts` | 112 | 26 个课堂示例（cin 类自带 input） |
 
 ---
 
@@ -226,7 +226,7 @@ code (string)
 ### 6.1 提交前的三道闸门
 
 ```bash
-npm run verify     # typecheck（0 错误）+ 36 个测试 + build
+npm run verify     # typecheck（0 错误）+ 37 个测试 + build
 ```
 
 想分开看：
@@ -332,6 +332,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 | v0.11.1 | 修「数据结构树/递归树不能并排」（两个叠起来的 bug） |
 | v0.11.2 | 右侧面板新增「⇔ 自动并排」按钮 |
 | v0.12.0 | preset 自带 cin 输入（选中即填）；`long long` > 2^53 显示精度警告；与外部教学项目脱钩 |
+| v0.13.0 | `switch` / `case` / `default`（C++ fallthrough 语义、`break` 只在 switch 内生效）；新增 20 条测试 |
 
 ---
 
@@ -371,8 +372,8 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 位运算（`^ & | << >>` 与 `__builtin_*`）、指针、类/构造/析构/成员函数、运算符重载、模板、迭代器遍历（只识别 `sort(v.begin(),v.end())` 这几种固定搭配）、`printf`、完整 `<iomanip>`（只做 `fixed` + `setprecision`）。
 
 **还没做、但教材可能用到（建议按需再加）**：
-`switch`、lambda、默认参数、`for` 标头里的逗号表达式、函数式转型 `double(x)`、`string` 的比较子以外的迭代器用法。
-（`switch` 与 lambda 在常见的算法教学材料里出现频率不高，但 `switch` 的缺失最容易在学生抄范例时卡住——如果要加，优先 `switch`。）
+lambda、默认参数、`for` 标头里的逗号表达式、函数式转型 `double(x)`、`string` 的比较子以外的迭代器用法。
+（`switch` 已于 v0.13.0 补上，见 `test/switch-test.ts`；剩下这些都是「有等价写法、教学材料里少见」的。另外 `case` 标签目前不强制常量表达式，能求值即可。）
 
 ### 9.2 数值与规模
 
@@ -414,7 +415,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 3. **CI 实测一次**：push 后看 Actions；若失败，多半是 Windows/Linux 的路径或换行差异（golden 现在按 `\r?\n` 读取，跨平台一致）。
 
 **P1（教材驱动，做之前先问清楚需求）**
-4. `switch` 语句（最容易卡住学生抄范例）；
+4. ~~`switch` 语句~~（v0.13.0 已完成，见 `test/switch-test.ts`：fallthrough / break / default / 标签叠写 / 嵌套都有断言）；
 5. `for` 标头逗号表达式（`for (int i=0, j=n; i<j; i++, j--)`）；
 6. 默认参数 / lambda（按需）。
 
@@ -444,7 +445,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 
 ---
 
-## 12. 测试档索引（36 个，`npm test` 全跑）
+## 12. 测试档索引（37 个，`npm test` 全跑）
 
 | 类别 | 档案 | 覆盖 |
 |---|---|---|
@@ -453,6 +454,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 | 缺口/新功能 | `gap-test` | 教学缺口清单第一/二优先的每一项 |
 | 渲染 | `render-test`, `render-limit-test`, `summary-test`, `aliasbadge-test`, `calllabel-test` | HTML 结构/规模上限/摘要文字/别名徽章/调用树标签 |
 | 面板 | `panellayout-test`, `editor-setup-test`, `appshell-test`, `crash-test` | 布局纯函数/缩排/整个 App 的 SSR/ErrorBoundary |
+| 控制流 | `switch-test` | case/default 匹配、fallthrough、break 只跳出 switch、标签叠写、嵌套、快照行号 |
 | 解释器语义 | `cw-test`, `container-test`, `struct-test`, `struct-return-test`, `struct-container-test`, `arrayparam-test`, `rangefor-test`, `do-while-test`, `initlist-test`, `multivec-test`, `pair-test`, `setmap-test`, `stl-test`, `string-test`, `strfunc-test`, `stoi-test`, `sortcmp-test`, `cin-test`, `pushvar-test` | 各语言特性 |
 | 端到端 | `presets-test`, `graph-test`, `dijkstra-test`, `dijkstra-pq-test` | 每个 preset 执行 + 渲染；图与最短路范例 |
 
@@ -472,4 +474,4 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 
 ---
 
-*这份文件由 v0.12.0 收尾时整理。若你（下一个 AI）做了结构性改动，请把它更新到最新，并保留「已知不足」的诚实度——那是它最有价值的部分。*
+*这份文件由 v0.13.0 收尾时整理。若你（下一个 AI）做了结构性改动，请把它更新到最新，并保留「已知不足」的诚实度——那是它最有价值的部分。*

@@ -4,7 +4,7 @@
 > 当前行高亮，读 = 蓝 / 写 = 绿 / 判断 = 橙，可前进、后退、跳步、断点。
 > **纯前端、零后端**：一个静态站点（866 KB，gzip 271 KB），也可以内联成**单个 HTML 文件**离线跑。
 
-**English.** cpp-viz is a browser-based C++ stepping visualiser I built from scratch. It ships a hand-written lexer → parser → AST, plus a generator-based interpreter that yields one immutable `Snapshot` per statement; the React UI is just a player that replays `snapshots[i]`. That design makes stepping *backwards*, jumping to step N, and breakpoints free — nothing is re-executed. No compiler, no debugger, no server: 31 source files / ~8k lines of TypeScript, 36 test files, 22 built-in examples.
+**English.** cpp-viz is a browser-based C++ stepping visualiser I built from scratch. It ships a hand-written lexer → parser → AST, plus a generator-based interpreter that yields one immutable `Snapshot` per statement; the React UI is just a player that replays `snapshots[i]`. That design makes stepping *backwards*, jumping to step N, and breakpoints free — nothing is re-executed. No compiler, no debugger, no server: 31 source files / ~8k lines of TypeScript, 37 test files, 26 built-in examples.
 
 ![归并排序：左侧代码与当前行高亮，右侧递归树、局部变量与数组](docs/screenshot-recursion.png)
 
@@ -35,7 +35,7 @@
 
 ## 功能一览
 
-**执行与交互**：运行 / 暂停 / 单步 / 后退 / 跳到第 N 步 / 速度滑条；行号断点；快捷键（空格、←/→、R）；cin 输入预填；25 个内置示例；草稿自动保存。
+**执行与交互**：运行 / 暂停 / 单步 / 后退 / 跳到第 N 步 / 速度滑条；行号断点；快捷键（空格、←/→、R）；cin 输入预填；26 个内置示例；草稿自动保存。
 
 **右侧数据面板**
 - 当前行高亮；读 = 蓝、写 = 绿、判断 = 橙；判读横幅（「判断 i ≤ mid ✓ 为真 · 继续」）
@@ -72,8 +72,8 @@ src/components/    CodeEditor、VariablesPanel（面板壳）
                    viz/（window / containers / graph / tree / format）
                    usePlayer（播放器状态机）、Topbar、Splitter、OutputPane、ErrorBoundary
 src/App.tsx        主壳：版面 + 接线 + 全局快捷键 +「⇔ 自动并排」
-src/presets.ts     25 个内置示例
-test/              36 个测试文件（语义 / 渲染 / 布局 / golden / 兼容矩阵）
+src/presets.ts     26 个内置示例
+test/              37 个测试文件（语义 / 渲染 / 布局 / golden / 兼容矩阵）
 ```
 
 依赖方向：`components → interpreter`，解释器不 import React，可单独在 Node 里跑（测试就是这么做的）。
@@ -85,17 +85,17 @@ test/              36 个测试文件（语义 / 渲染 / 布局 / golden / 兼�
 | 项 | 数值 |
 |---|---|
 | 源码规模 | 31 个文件 / 约 8,000 行 TypeScript（解释器 + 渲染层） |
-| 测试 | 36 个测试文件 / 2,573 行；golden 特性化 + SSR 渲染 + 布局纯函数 + 兼容矩阵 |
+| 测试 | 37 个测试文件 / 2,573 行；golden 特性化 + SSR 渲染 + 布局纯函数 + 兼容矩阵 |
 | 产物 | 866 KB JS（gzip 271 KB）+ 19 KB CSS；无后端、无运行时服务 |
 | 依赖 | React 19 + CodeMirror 6（无编辑器外的大型框架） |
-| 内置示例 | 25 个 |
+| 内置示例 | 26 个 |
 | 语言子集 | 7 种标量类型 + 16 种容器/结构 + 常用 STL 函数与输入输出 |
 
 ## 测试与验证
 
 ```bash
 npm run typecheck   # tsc --noEmit（0 错误）
-npm test            # 36 个测试文件
+npm test            # 37 个测试文件
 npm run verify      # typecheck + test + build（提交前必跑）
 ```
 
@@ -106,7 +106,7 @@ npm run verify      # typecheck + test + build（提交前必跑）
 
 ## 已知限制
 
-1. **只支持教学子集**：位运算、指针、类、模板、迭代器遍历、`printf`、`switch`、lambda、函数重载都不做；不支持的写法会**明确报错**。
+1. **只支持教学子集**：位运算、指针、类、模板、迭代器遍历、`printf`、lambda、函数重载都不做；不支持的写法会**明确报错**。目前已支持 `switch` / `case` / `default`（含 C++ 的 fallthrough 语义）。
 2. `long long` 用 JS number 存，安全范围约 ±2^53；超过时**会显示醒目警告**（不是静默失真），但数值仍然不精确。
 3. 步数上限 20000；图 > 80 节点改表格；长容器只列前 300 项。
 4. 局部数组声明后预设全 0（真实 C++ 是未定义值）。

@@ -68,6 +68,13 @@ export type CoutItem =
   | { kind: 'endl' }
   | { kind: 'expr'; expr: Expr }
 
+export type SwitchCase = {
+  line: number
+  /** null = default */
+  label: Expr | null
+  body: Stmt[]
+}
+
 export type Stmt =
   | VarDecl
   | { kind: 'expr_stmt'; line: number; expr: Expr }
@@ -75,6 +82,9 @@ export type Stmt =
   | { kind: 'cin'; line: number; targets: Expr[] }
   | { kind: 'block'; line: number; body: Stmt[] }
   | { kind: 'if'; line: number; cond: Expr; then: Stmt; else?: Stmt }
+  // switch：label === null 代表 default。body 是「这个标签后面的语句」，
+  // 语义照 C++ —— 匹配后一直往下执行（fallthrough），直到 break 或结束。
+  | { kind: 'switch'; line: number; subject: Expr; cases: SwitchCase[] }
   | { kind: 'for'; line: number; init?: Stmt; cond?: Expr; incr?: Expr; body: Stmt }
   | { kind: 'while'; line: number; cond: Expr; body: Stmt }
   // condLine = while 关键字所在行（快照要在「body 跑完、尚未求值条件」时高亮这一行）

@@ -2,6 +2,12 @@
 
 > 註：本檔是逐版本開發日誌。早期條目提到的「HKOI」是作者當時參與的外部教學專案；**2026-10-19 起本專案已與該專案脫鉤**（跨專案測試已移除，倉庫自包含），歷史條目保持原樣以保留脈絡。
 
+- 2026-10-19：**v0.13.0 —— `switch` / `case` / `default`**。
+  - 語法：`switch (expr) { case c1: ... case c2: ... default: ... }`；允許標籤疊寫（`case 1: case 2:`），`default` 可以寫在中間或最前。
+  - 語義照 C++：subject 只求值一次 → 找第一個相等的 case（沒有就 default）→ **一路 fallthrough** 到 `break` 或結尾。`break` 沿用 `BreakSignal`，所以 switch 裡的 `break` 只跳出 switch、外層迴圈的 `break` 行為不變；`continue` 仍由外層迴圈接住。
+  - 視覺化：每個 case 標籤行會產生一個快照（游標停在 `case 2:` 上講「跳到這裡」），沒匹配到的 case body 不會產生快照。
+  - 測試：新增 `test/switch-test.ts`（20 條：基本 / default / fallthrough / break / 標籤疊寫 / char / 負數 / 嵌套 / 快照行號 / 兩種語法錯誤），`compat-test` 加 2 條，測試檔 36 → 37。
+  - 這個功能是 `docs/AI-HANDOFF.md` §10 P1 的第一項（「最容易卡住學生抄範例」）。
 - 2026-10-19：**v0.12.0 —— preset 自带 cin 输入 + 长整型精度警告**。
   - 25 个示例：新增「读入 n 个数求和 / while(cin) 读到 EOF / getline 读整行」，三个都带 `input`，选中示例时自动填进 cin 框（以前要手动敲，很容易先在空输入上跑一次、看到「输入不足」以为示例坏了）。`presets-test` 增加不变量：任何用 cin/getline 的示例必须自带 input。
   - `long long` 超过 2^53：`core.ts` 的 `notePrecision()` 记一条警告，快照带 `warning` 字段，输出面板上方显示琥珀色提示（**不中断程序**）——这是项目「绝不静默给错答案」原则的最后一块缺口。`compat-test` 加了两条（超范围必须有警告 / 正常范围不许乱报）。

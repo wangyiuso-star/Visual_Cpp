@@ -1,7 +1,7 @@
 {
   "name": "cpp-viz",
   "private": true,
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "面向 OI / 算法教学的 C++ 代码逐步可视化工具（浏览器内迷你解释器：变量/容器/图/递归树逐步演示）",
   "keywords": [
     "cpp",

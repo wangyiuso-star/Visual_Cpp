@@ -90,7 +90,6 @@ yes('setprecision(n)', 'int main(){ cout<<setprecision(2)<<3.14159; return 0; }'
 yes('fixed + setprecision(n)', 'int main(){ cout<<fixed<<setprecision(2)<<3.14159; return 0; }', '3.14')
 yes('fixed 單獨（預設 6 位小數）', 'int main(){ cout<<fixed<<3.14159; return 0; }', '3.141590')
 no('printf', 'int main(){ printf("x"); return 0; }')
-no('switch', 'int main(){ int x=1; switch(x){ case 1: break; } return 0; }')
 yes('三目 a?b:c', 'int main(){ int a=1,b=2; cout<<(a>b?a:b); return 0; }', '2')
 no('位運算 ^', 'int main(){ cout<<(5^3); return 0; }')
 yes('C 風格 cast (double)a', 'int main(){ int a=1,b=3; cout<<(double)a/b; return 0; }', '0.333333')
@@ -98,6 +97,9 @@ yes('C 風格 cast (char)(c+1)', "int main(){ char c='a'; cout<<(char)(c+1); ret
 yes('C 風格 cast (int)v.size()', 'int main(){ vector<int> v; v.push_back(1); cout<<(int)v.size(); return 0; }', '1')
 yes('cin.get()', 'int main(){ char c; c = cin.get(); cout<<c; return 0; }', 'a', 'a')
 yes('using (型別別名 / namespace)', 'using ll = long long;\nint main(){ ll x=5; cout<<x; return 0; }', '5')
+
+yes('switch 語句（含 break）', 'int main(){ int x=2; switch(x){ case 1: cout<<"a"; break; case 2: cout<<"b"; break; } return 0; }', 'b')
+yes('switch fallthrough', 'int main(){ int x=1; switch(x){ case 1: cout<<"1"; case 2: cout<<"2"; } return 0; }', '12')
 
 // ---------- C. 不能下標的容器要明確報錯（S8：以前是 undefined 崩潰）----------
 // C++ 也不允許 s[0] / st[0]，所以寧可報錯也不要靜默取到元素或吐 undefined。

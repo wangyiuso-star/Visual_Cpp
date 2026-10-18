@@ -705,6 +705,34 @@ export function* execStmt(rt: Runtime, s: Stmt): Generator<Snapshot> {
       break
     }
 
+    // switch：先求 subject 一次，找到第一个相等的 case（否则 default），
+    // 然后照 C++ 的 fallthrough 一路往下执行，直到 break 或结尾。
+    // break 复用 BreakSignal：里层循环若先接住它，就是「只跳出循环」，语义与 C++ 一致。
+    case 'switch': {
+      rt.mem.clearAccess()
+      const subject = yield* evalExpr(rt, s.subject)
+      let start = -1
+      let defaultIdx = -1
+      for (let i = 0; i < s.cases.length; i++) {
+        const c = s.cases[i]
+        if (c.label === null) { defaultIdx = i; continue }
+        const lv = yield* evalExpr(rt, c.label)
+        if (start === -1 && cmp(subject, lv, s.line) === 0) start = i
+      }
+      if (start === -1) start = defaultIdx
+      if (start === -1) break
+      try {
+        for (let i = start; i < s.cases.length; i++) {
+          yield* mark(rt, s.cases[i].line)
+          for (const st of s.cases[i].body) yield* execStmt(rt, st)
+        }
+      } catch (e) {
+        if (e instanceof BreakSignal) break
+        throw e
+      }
+      break
+    }
+
     case 'while': {
       while (true) {
         rt.mem.clearAccess()

@@ -109,4 +109,8 @@ export const PRESETS: Preset[] = [
     input: 'hello world',
     code: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  string line;\n  getline(cin, line);\n  cout << line << endl;\n  return 0;\n}\n',
   },
+  {
+    name: 'switch 分级',
+    code: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  int score = 85;\n  switch (score / 10) {\n    case 10:\n    case 9:\n      cout << "A" << endl;\n      break;\n    case 8:\n      cout << "B" << endl;\n      break;\n    default:\n      cout << "C" << endl;\n  }\n  return 0;\n}\n',
+  },
 ]
