@@ -52,6 +52,7 @@ export function* run(program: Program, opts?: RunOptions): Generator<Snapshot> {
         callTree: cloneCallTree(rt.callTree),
         activeCallId: rt.activeCallId,
         error: e.message,
+        warning: rt.warning,
       }
       return
     }
@@ -76,6 +77,7 @@ export function* run(program: Program, opts?: RunOptions): Generator<Snapshot> {
         callTree: cloneCallTree(rt.callTree),
         activeCallId: rt.activeCallId,
         error: e.message,
+        warning: rt.warning,
       }
       return
     } else if (e instanceof Error) {
@@ -90,6 +92,7 @@ export function* run(program: Program, opts?: RunOptions): Generator<Snapshot> {
         callTree: cloneCallTree(rt.callTree),
         activeCallId: rt.activeCallId,
         error: '内部错误（这是本工具的 bug，请把这段程序反馈给我们）：' + e.message,
+        warning: rt.warning,
       }
       return
     } else {
@@ -108,5 +111,6 @@ export function* run(program: Program, opts?: RunOptions): Generator<Snapshot> {
     callTree: cloneCallTree(rt.callTree),
     activeCallId: rt.activeCallId,
     done: true,
+    warning: rt.warning,
   }
 }

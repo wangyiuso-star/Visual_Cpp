@@ -19,6 +19,9 @@ export interface Snapshot {
   done?: boolean
   // 自定义比较函数排序的统计（比较次数刻意做成可见的教学点，见建议书优先 3）
   sortInfo?: { name: string; n: number; comparisons: number; warned: boolean }
+  /** 非致命警告：目前只有「long long 超过 2^53，JS number 已经开始失真」。
+   *  不中断程序（所以不是 error），但要显式告诉使用者「这一步算的数已经不准了」——与项目第一原则一致。 */
+  warning?: string
 }
 
 export interface CallNode {
@@ -95,6 +98,8 @@ export interface Runtime {
   floatPrecision: number | null
   structs: Map<string, StructDef>
   sortInfo: { name: string; n: number; comparisons: number; warned: boolean } | null
+  /** 最近一次「数值精度」警告（long long > 2^53）。每步快照会带上它，UI 显示在输出面板上方。 */
+  warning?: string
 }
 
 export const MAX_STEPS = 20000

@@ -184,7 +184,8 @@ export default function App() {
         indentSize={indentSize}
         onPickPreset={(name) => {
           const p = PRESETS.find((x) => x.name === name)
-          if (p) onCodeChange(p.code)
+          // 范例自带 cin 输入就一起填上：否则会先在空输入上跑一次，看到「输入不足」还以为示例坏了
+          if (p) { onCodeChange(p.code); if (p.input !== undefined) { setInput(p.input); player.invalidate() } }
         }}
         onTogglePlay={player.togglePlay}
         onStepForward={player.stepForward}

@@ -1,6 +1,8 @@
 export interface Preset {
   name: string
   code: string
+  /** 范例自带的 cin 输入：选中示例时自动填进「cin 输入」框（少了它就要手动敲，很容易先在空输入上跑一次、看到「输入不足」） */
+  input?: string
 }
 
 export const PRESETS: Preset[] = [
@@ -91,5 +93,20 @@ export const PRESETS: Preset[] = [
   {
     name: 'sort + 自訂 cmp',
     code: '#include <bits/stdc++.h>\nusing namespace std;\n\nint a[8] = {25, 12, 44, 31, 53, 8, 76, 67};\nint n = 8;\n\n// returns true if x should come before y\nbool byLastDigit(int x, int y) {\n  return x % 10 < y % 10;\n}\n\nint main() {\n  sort(a, n, byLastDigit);\n  for (int i = 0; i < n; i++) cout << a[i] << " ";\n  cout << endl;\n  return 0;\n}\n',
+  },
+  {
+    name: '读入 n 个数求和',
+    input: '5\n3 1 4 1 5',
+    code: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  int n;\n  cin >> n;\n  int sum = 0;\n  for (int i = 0; i < n; i++) {\n    int x;\n    cin >> x;\n    sum += x;\n  }\n  cout << sum << endl;\n  return 0;\n}\n',
+  },
+  {
+    name: 'while(cin) 读到 EOF',
+    input: '1 2 3 4 5',
+    code: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  int x, sum = 0, cnt = 0;\n  while (cin >> x) {\n    sum += x;\n    cnt++;\n  }\n  cout << cnt << " " << sum << endl;\n  return 0;\n}\n',
+  },
+  {
+    name: 'getline 读整行',
+    input: 'hello world',
+    code: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  string line;\n  getline(cin, line);\n  cout << line << endl;\n  return 0;\n}\n',
   },
 ]

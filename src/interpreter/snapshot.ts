@@ -118,6 +118,7 @@ export function* mark(rt: Runtime, line: number): Generator<Snapshot> {
     callTree: cloneCallTree(rt.callTree),
     activeCallId: rt.activeCallId,
     sortInfo: rt.sortInfo ? { ...rt.sortInfo } : undefined,
+    warning: rt.warning,
   }
   rt.mem.clearAccess()
   yield snap
@@ -145,6 +146,7 @@ export function* markCondition(rt: Runtime, line: number, cond: Expr, result: bo
     judges,
     condition: { kind, text: formatExpr(cond), result },
     sortInfo: rt.sortInfo ? { ...rt.sortInfo } : undefined,
+    warning: rt.warning,
     vars: dumpAll(rt),
     output: rt.out.join(''),
     callTree: cloneCallTree(rt.callTree),

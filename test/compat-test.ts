@@ -107,5 +107,24 @@ no('queue 不能下標', 'int main(){ queue<int> q; q.push(1); cout<<q[0]; retur
 no('省 array 大小卻沒有初始化列表', 'int main(){ int a[]; return 0; }')
 no('省 array 大小卻用純量初始化（int a[] = x）', 'int main(){ int x=1; int a[] = x; return 0; }')
 
+// ---------- D. 數值精度：超過 2^53 必須顯式警告，不能靜默給錯答案 ----------
+// C++ 的 long long 到 9.2e18，但本工具用 JS number 存（精確上限 2^53≈9.0e15）。
+// 規則：算到超出範圍要「看得見」的 warning（不中斷程式），沒超出則不能亂報。
+function lastSnap(code: string) {
+  let last: any = null
+  for (const s of run(parse(code), { input: '' })) last = s
+  return last
+}
+{
+  const s = lastSnap('int main(){ long long x = 9223372036854775807; cout << x; return 0; }')
+  if (s && s.warning) pass++
+  else { fail++; console.log('FAIL [精度] long long 字面量超过 2^53 必須有 warning') }
+}
+{
+  const s = lastSnap('int main(){ long long x = 100; x = x * 1000; cout << x; return 0; }')
+  if (s && !s.warning) pass++
+  else { fail++; console.log('FAIL [精度] 正常範圍不該出現 warning') }
+}
+
 console.log('==== compat-test: ' + pass + ' 通過, ' + fail + ' 失敗 ====')
 if (fail > 0) process.exit(1)

@@ -72,7 +72,7 @@ check('pair 里放容器', formatCellShort(pairOf(sc(1), vec([sc(2)]))) === '(1,
   for (const preset of PRESETS) {
     let last: any = null
     try {
-      for (const s of run(parse(preset.code), { input: '3 2 1' })) {
+      for (const s of run(parse(preset.code), { input: preset.input ?? '3 2 1' })) {
         for (const v of s.vars) {
           n++
           let t = ''

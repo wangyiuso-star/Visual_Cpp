@@ -17,7 +17,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - `src/components/` — `CodeEditor`、`VariablesPanel`（面板壳）、`viz/{window,containers,graph,tree,format}`、`usePlayer`（播放器状态机）、`Topbar`、`Splitter`、`OutputPane`、`ErrorBoundary`、`panelLayout`/`editorSetup`/`graphLimit`
 - `src/App.tsx` — 主壳：版面 + 接线 + 全局快捷键 +「⇔ 自动并排」
 - `src/index.css` — 全部样式（含窄屏/窄面板 `@media`、`@container`、卡片网格）
-- `src/presets.ts` — 22 个课堂示例
+- `src/presets.ts` — 25 个课堂示例
 - `test/` — 36 个测试档（`npm test`）；`test/_helpers.ts` 是共用样版（`_` 开头不会被当测试档）
 - `docs/` — 文档（见上面链接）
 - `scripts/run-tests.mjs` — 测试执行器（rolldown 打包 → node 逐档执行）
@@ -44,7 +44,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - 逐版本历史见 `docs/HANDOFF.md`；架构与重构记录见 `docs/ARCHITECTURE.md`
 
 ## 下一步（优先级）
-1. **P0**：preset 自带范例输入（自动填 cin 框）；`long long` > 2^53 的静默失准改成警告；第一次 push 后确认 GitHub Actions 结果
+1. **P0（v0.12.0 已完成）**：~~preset 自带范例输入~~、~~`long long` > 2^53 改成警告~~；只剩「push 后确认 GitHub Actions 结果」
 2. **P1（教材驱动，先问需求）**：`switch`（最容易卡学生）、`for` 逗号表达式、默认参数/lambda
 3. **P2**：深色/浅色主题、导出画面 PNG、统一剩下 28 个测试档的 harness
 4. **P3**：`core.ts` 再拆（非必要）、`index.css` 拆档（要先有视觉回归）

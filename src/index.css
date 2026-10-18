@@ -203,6 +203,15 @@ body {
   color: var(--text);
 }
 .output-pane pre.error { color: #ff7b72; }
+.output-warning {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #f0c674;
+  background: rgba(240, 198, 116, .08);
+  border-bottom: 1px solid rgba(240, 198, 116, .25);
+}
 
 .editor-pane {
   flex: 1 1 55%;

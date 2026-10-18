@@ -37,7 +37,7 @@ console.log('-'.repeat(88))
 for (const p of PRESETS) {
   let snaps: any[] = []
   try {
-    snaps = [...run(parse(p.code), {})]
+    snaps = [...run(parse(p.code), { input: p.input ?? '' })]
   } catch (e) {
     check(p.name + ' 可执行', false, '执行期抛错: ' + (e as Error).message)
     continue

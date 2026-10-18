@@ -3,7 +3,7 @@
 > **这份文件是写给「接手这个项目的下一个 AI 助手 / 下一个维护者」的。**
 > 它会随仓库一起提交（`docs/AI-HANDOFF.md`），所以内容按**公开可读**的标准写：不写会话内幕，只写现状、约定、怎么验证、哪里还不行。
 >
-> - 最后更新：2026-10-19（对应版本 **v0.11.2**）
+> - 最后更新：2026-10-19（对应版本 **v0.12.0**）
 > - 先读这一份；结构与设计细节见 [ARCHITECTURE.md](./ARCHITECTURE.md)，变更日志见 [HANDOFF.md](./HANDOFF.md)，已解决的疑难见 [DEBUG.md](./DEBUG.md)，语言子集细节见 [LANGUAGE-SUBSET.md](./LANGUAGE-SUBSET.md)
 
 ---
@@ -109,7 +109,7 @@ snapshot.ts   builtins.ts   cells.ts   values.ts   input.ts   runtime.ts
 | `graphLimit.ts` | 19 | 图规模闸门（节点 ≤ 80、边 ≤ 800） |
 | `App.tsx` | 257 | 主壳：版面、接缐、全局快捷键、**「⇔ 自动并排」** |
 | `index.css` | 718 | 全部样式（含窄屏/窄面板的 `@media`、`@container` 与卡片网格） |
-| `presets.ts` | 96 | 22 个课堂示例 |
+| `presets.ts` | 112 | 25 个课堂示例（cin 类自带 input） |
 
 ---
 
@@ -331,6 +331,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 | v0.11.0 | **解耦重构第二批（S0–S9）**：interpreter 2930 → 113 行；`tsc` 31 → 0；新增 `npm run verify` |
 | v0.11.1 | 修「数据结构树/递归树不能并排」（两个叠起来的 bug） |
 | v0.11.2 | 右侧面板新增「⇔ 自动并排」按钮 |
+| v0.12.0 | preset 自带 cin 输入（选中即填）；`long long` > 2^53 显示精度警告；与外部教学项目脱钩 |
 
 ---
 
@@ -471,4 +472,4 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 
 ---
 
-*这份文件由 v0.11.2 收尾时整理。若你（下一个 AI）做了结构性改动，请把它更新到最新，并保留「已知不足」的诚实度——那是它最有价值的部分。*
+*这份文件由 v0.12.0 收尾时整理。若你（下一个 AI）做了结构性改动，请把它更新到最新，并保留「已知不足」的诚实度——那是它最有价值的部分。*

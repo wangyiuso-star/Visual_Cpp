@@ -17,8 +17,21 @@ import { Memory, asIndexable } from './memory'
 import type { BstNode, Cell, ScalarValue } from './memory'
 import type { AssignExpr, CallExpr, Expr, InitExpr, MethodCallExpr, ScalarTypeName, Stmt, Type, UpdateExpr, VarDecl } from './ast'
 
-export function* sizeofOperand(rt: Runtime, operand: Expr, line: number): Generator<Snapshot, number> {
-  // sizeof(int) / sizeof(long long)：運算元是型別名
+/** 整数类型用 JS number 存。超过 2^53 之后就不再有精确整数，但程序还能跑 ——
+ *  按项目第一原则（宁可明确报错，也不静默给错答案），这里不中断，只记一条警告，
+ *  由快照带给 UI 显示在输出面板上方。 */
+const SAFE_INT_LIMIT = Number.MAX_SAFE_INTEGER
+function notePrecision(rt: Runtime, rv: RV): RV {
+  if ((rv.type === 'long long' || rv.type === 'int') && typeof rv.v === 'number' && Math.abs(rv.v) > SAFE_INT_LIMIT) {
+    rt.warning =
+      '整数已超出精确范围：算到 ' +
+      String(rv.v) +
+      '，超过 2^53（约 9.0e15）。C++ 里这块由 long long 表示（可到 9.2e18），但本工具用 JS number 存储，**这一步之后的计算可能已经失真**。'
+  }
+  return rv
+}
+
+export function* sizeofOperand(rt: Runtime, operand: Expr, line: number): Generator<Snapshot, number> {  // sizeof(int) / sizeof(long long)：運算元是型別名
   if (operand.kind === 'ident') {
     const byName = TYPE_NAME_BYTES[operand.name]
     if (byName !== undefined) return byName
@@ -184,7 +197,7 @@ export const evalCtx: EvalCtx = { evalExpr, resolveTarget }
 export function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
   switch (expr.kind) {
     case 'literal':
-      return { type: expr.litType, v: expr.value as ScalarValue }
+      return notePrecision(rt, { type: expr.litType, v: expr.value as ScalarValue })
 
     case 'ident': {
       // <climits> 的常数。long long 用 JS number 存，所以 LLONG_MAX 只有约 2^53 的精度（见 README）。
@@ -236,7 +249,7 @@ export function* evalExpr(rt: Runtime, expr: Expr): Generator<Snapshot, RV> {
       }
       const l = yield* evalExpr(rt, expr.left)
       const r = yield* evalExpr(rt, expr.right)
-      return applyBinary(expr.op, l, r, expr.line)
+      return notePrecision(rt, applyBinary(expr.op, l, r, expr.line))
     }
 
     case 'unary': {
@@ -379,7 +392,7 @@ export function* execUpdate(rt: Runtime, expr: UpdateExpr): Generator<Snapshot, 
   const binOp = expr.op === '++' ? '+' : '-'
   const one: RV = { type: 'int', v: 1 }
   const old: RV = { type: lv.cell.type, v: lv.cell.value === null ? defaultScalar(lv.cell.type) : lv.cell.value }
-  const nv = applyBinary(binOp, old, one, expr.line)
+  const nv = notePrecision(rt, applyBinary(binOp, old, one, expr.line))
   // 存回去要照目标的型别转换：char c; c++ 要存 'b'，不是 98（以前 cout 会印出 98）
   const sv = coerceTo(lv.cell.type, nv, expr.line)
   lv.mem.setScalar(lv.name, lv.path, sv)

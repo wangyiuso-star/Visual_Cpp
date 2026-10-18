@@ -3,6 +3,8 @@ import type { Snapshot } from '../interpreter/interpreter'
 export interface OutputView {
   text: string
   isError: boolean
+  /** 非致命警告（目前只有 long long 超出 2^53 的精度失真）：显示在输出上方，不遮挡输出本身 */
+  warning?: string
 }
 
 /**
@@ -13,8 +15,8 @@ export interface OutputView {
  */
 export function outputView(cur: Snapshot | null, error: string | null): OutputView {
   if (cur) {
-    if (cur.error) return { text: cur.error, isError: true }
-    return { text: cur.output || '(无输出)', isError: false }
+    if (cur.error) return { text: cur.error, isError: true, warning: cur.warning }
+    return { text: cur.output || '(无输出)', isError: false, warning: cur.warning }
   }
   if (error) return { text: error, isError: true }
   return { text: '(尚未运行)', isError: false }
@@ -25,6 +27,11 @@ export default function OutputPane({ view, height }: { view: OutputView; height?
   return (
     <div className="output-pane" style={height === undefined ? undefined : { height }}>
       <div className="output-pane-title">输出</div>
+      {view.warning && (
+        <div className="output-warning" role="status">
+          ⚠ {view.warning}
+        </div>
+      )}
       <pre className={view.isError ? 'error' : ''}>{view.text}</pre>
     </div>
   )
