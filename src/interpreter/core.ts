@@ -26,7 +26,7 @@ function notePrecision(rt: Runtime, rv: RV): RV {
     rt.warning =
       '整数已超出精确范围：算到 ' +
       String(rv.v) +
-      '，超过 2^53（约 9.0e15）。C++ 里这块由 long long 表示（可到 9.2e18），但本工具用 JS number 存储，**这一步之后的计算可能已经失真**。'
+      '，超过 2^53（约 9.0e15）。C++ 里这块由 long long 表示（可到 9.2e18），但本工具用 JS number 存储，这一步之后的计算可能已经失真。'
   }
   return rv
 }
