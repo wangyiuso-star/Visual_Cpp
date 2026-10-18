@@ -40,7 +40,7 @@ export default function Topbar(props: TopbarProps) {
   return (
     <div className="topbar">
       <span className="brand">
-        <span className="logo">OI</span> 代码可视化
+        <span className="logo">C++</span> 代码可视化
       </span>
       <select
         className="preset-select"

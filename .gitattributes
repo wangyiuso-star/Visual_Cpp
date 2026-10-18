@@ -1,0 +1,7 @@
+# golden 文件按 LF 存：测试按行比对，CRLF 会让每个用例看起来"一模一样却判不等"
+test/_golden/* text eol=lf
+
+# 二进制资源不要做换行转换
+*.png binary
+*.jpg binary
+*.ico binary

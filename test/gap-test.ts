@@ -1,7 +1,7 @@
 import { parse } from '../src/interpreter/parser'
 import { run } from '../src/interpreter/interpreter'
 
-// 这一轮（v0.7.0）从 HKOI 教材编辑的缺口提案实作出来的功能，逐条锁住。
+// 这一轮（v0.7.0）从教学缺口提案实作出来的功能，逐条锁住。
 // 提案：_工作檔/工作紀錄/13-給VisualCode的缺口提案.md（可用 28 / 不支援 29 的探针表）。
 
 let pass = 0

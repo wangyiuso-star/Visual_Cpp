@@ -1,9 +1,9 @@
-# AGENTS.md — OI 代码可视化（cpp-viz）
+# AGENTS.md — cpp-viz（C++ 逐步可视化执行器）
 
 > 每个新会话自动读入的项目上下文。**详细状态见 [docs/AI-HANDOFF.md](docs/AI-HANDOFF.md)（交接总纲）**；逐版本变更见 [docs/HANDOFF.md](docs/HANDOFF.md)；卡住的 bug 见 [docs/DEBUG.md](docs/DEBUG.md)；语言子集规格见 [docs/LANGUAGE-SUBSET.md](docs/LANGUAGE-SUBSET.md)。
 
 ## 项目
-面向 OI / 算法教学的 **C++ 代码逐步可视化**工具：左边写代码 + cin 输入 + 输出，右边实时显示变量 / 数组 / vector / 栈 / 队列 / 堆 / 树 / BST / 图，逐步高亮当前行与读写格子，函数/递归以调用树显示。
+面向 C++ 教学与自学的 **代码逐步可视化**工具：左边写代码 + cin 输入 + 输出，右边实时显示变量 / 数组 / vector / 栈 / 队列 / 堆 / 树 / BST / 图，逐步高亮当前行与读写格子，函数/递归以调用树显示。
 形态 = **浏览器内迷你 C++ 解释器**（lexer → parser → 生成器式 stepper），不是编译器/调试器。
 
 ## 第一原则
@@ -18,7 +18,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - `src/App.tsx` — 主壳：版面 + 接线 + 全局快捷键 +「⇔ 自动并排」
 - `src/index.css` — 全部样式（含窄屏/窄面板 `@media`、`@container`、卡片网格）
 - `src/presets.ts` — 22 个课堂示例
-- `test/` — 37 个测试档（`npm test`）；`test/_helpers.ts` 是共用样版（`_` 开头不会被当测试档）
+- `test/` — 36 个测试档（`npm test`）；`test/_helpers.ts` 是共用样版（`_` 开头不会被当测试档）
 - `docs/` — 文档（见上面链接）
 - `scripts/run-tests.mjs` — 测试执行器（rolldown 打包 → node 逐档执行）
 
@@ -40,7 +40,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - **语言**：int/long long/char/bool/string/double/float；数组(1D/2D)、vector(1D/2D/多维/邻接表)、stack、queue、deque、priority_queue、tree、bst、set、map、umap、pair、struct；声明/赋值/++--/for/range-for/while/do-while/if-else/break/continue/return/cout/cin；自订函数+递归+全局变量+引用/const&/数组形参；内建 sort/reverse/lower_bound/swap/数学/字符函数/stoi/to_string/memset/fill/区间写法/#define/typedef/sizeof/三目/fixed+setprecision
 - **可视化**：当前行高亮、读写/判断着色、global/local 标签、递归树（返回变暗+返回值+缩放+调用栈模式+跟随）、数组窗口（1D 自适应 / 2D 固定 5×5 + 写入跳转）、图（带权/箭头/节点值）、堆/树/BST 树形图、struct 矩阵、别名徽章、排序比较次数
 - **交互**：运行/暂停/单步/后退/跳步/速度、断点、cin 预填、卡片拖动排序+单卡缩放+整行宽+持久化、多卡自动并排 +「⇔ 自动并排」按钮、Tab 缩排 2/4、快捷键、ErrorBoundary 防白屏
-- **工程**：解耦重构 S0–S9（interpreter 2930 → 113 行、App 493 → 257 行）、`tsc` 0 错误、37 个测试档 + `npm run verify`、CI workflow
+- **工程**：解耦重构 S0–S9（interpreter 2930 → 113 行、App 493 → 257 行）、`tsc` 0 错误、36 个测试档 + `npm run verify`、CI workflow
 - 逐版本历史见 `docs/HANDOFF.md`；架构与重构记录见 `docs/ARCHITECTURE.md`
 
 ## 下一步（优先级）

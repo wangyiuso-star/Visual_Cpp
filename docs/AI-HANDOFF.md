@@ -15,7 +15,7 @@
 | 是什么 | 浏览器内的 **C++ 代码逐步可视化**工具（OI / 算法教学用）：左边写 C++、右边实时画出变量/数组/容器/图/递归树，逐步高亮当前行与读写的格子 |
 | 形态 | **不是编译器、不是 GDB**：自己写的迷你解释器（lexer → parser → 生成器式 stepper）跑在浏览器里 |
 | 技术栈 | React 19 + Vite 8 + TypeScript + CodeMirror 6；无后端、无数据库 |
-| 规模 | `src/` 31 个文件 / 约 8750 行；`test/` 37 个测试文件 |
+| 规模 | `src/` 31 个文件 / 约 8000 行；`test/` 36 个测试文件 |
 | 跑起来 | `npm install` → `npm run dev` → http://localhost:5173 |
 | 三条命令 | `npm run dev`（开发）/ `npm test`（全部测试）/ `npm run verify`（typecheck + test + build，**提交前必跑**） |
 | 第一原则 | **宁可给出明确的错误，也绝不能静默给出错误答案**（详见 §5.1） |
@@ -45,7 +45,7 @@
 ```bash
 npm install
 npm run dev        # http://localhost:5173（Windows 也可以双击 start.bat）
-npm test           # 37 个测试文件：解释器语义 + 渲染层 + 面板布局 + golden
+npm test           # 36 个测试文件：解释器语义 + 渲染层 + 面板布局 + golden
 npm run verify     # typecheck + test + build，提交前必跑（目前全绿）
 ```
 
@@ -226,7 +226,7 @@ code (string)
 ### 6.1 提交前的三道闸门
 
 ```bash
-npm run verify     # typecheck（0 错误）+ 37 个测试 + build
+npm run verify     # typecheck（0 错误）+ 36 个测试 + build
 ```
 
 想分开看：
@@ -316,8 +316,8 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 | v0.5.2 | 修「cin 输入不足」的偶发 bug（改输入没让快照失效）+ 说清楚差几个值 |
 | v0.6.0 | 容器可以当值传递（回传 / 赋值 / 按值传参），修掉三个缺口 |
 | v0.6.1 | 容器当值不再显示「?」（递归摘要）+ 修 `vector<int>()` 崩溃 |
-| v0.7.0 | HKOI 缺口提案**第一优先**（输入游标/转型/数学函数/greater/fixed/const&/字符算术/容器比较） |
-| v0.8.0 | HKOI 缺口提案**第二优先**（#define / typedef / using / 三目 / sizeof+memset / fill / 区间写法） |
+| v0.7.0 | 教学缺口清单**第一优先**（输入游标/转型/数学函数/greater/fixed/const&/字符算术/容器比较） |
+| v0.8.0 | 教学缺口清单**第二优先**（#define / typedef / using / 三目 / sizeof+memset / fill / 区间写法） |
 | v0.9.0 | 右侧卡片拖动排序 + 单卡缩放 + 整行宽（+ 持久化） |
 | v0.9.1 | 黑屏防护（ErrorBoundary）+ localStorage 读取守卫 + 初始化列表尾逗号 |
 | v0.9.2 | 修「卡片放大到 160% 不够宽」（图被裁掉 + 横向卷轴） |
@@ -371,7 +371,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 
 **还没做、但教材可能用到（建议按需再加）**：
 `switch`、lambda、默认参数、`for` 标头里的逗号表达式、函数式转型 `double(x)`、`string` 的比较子以外的迭代器用法。
-（`switch` 与 lambda 在 HKOI 的教学材料里出现频率不高，但 `switch` 的缺失最容易在学生抄范例时卡住——如果要加，优先 `switch`。）
+（`switch` 与 lambda 在常见的算法教学材料里出现频率不高，但 `switch` 的缺失最容易在学生抄范例时卡住——如果要加，优先 `switch`。）
 
 ### 9.2 数值与规模
 
@@ -394,11 +394,11 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 - **没有真正的 e2e 测试**：所有「浏览器行为」都是靠临时 CDP 探针人工验证（没有进 CI）；
 - **CI 尚未在 GitHub 上实测**（`/.github/workflows/ci.yml` 已加，第一次 push 后请看 Actions 结果；本机 `npm run verify` 是全绿的）；
 - `App.tsx` 仍有 257 行、没有元件级测试（只有 SSR 烟雾测试 `appshell-test`）；
-- `hkoi-presets-test.ts` 依赖仓库外的 `../../HKOI_teaching/VisualCode-preset/presets`，在别处 clone 时会被 SKIP（这是刻意设计，别把它改成 FAIL）。
+- 仓库自 2026-10-19 起**自包含**：原先引用仓库外教学专案 preset 的跨项目测试已移除，`npm install && npm test` 在任何 clone 上结果一致。
 
 ### 9.5 教学 / 产品
 
-- **preset 没有内建输入**：`cin` 的范例要手动填输入框（`hkoi-presets-test` 里有一份 `PRESET_INPUTS` 可以参考）——把 `input` 放进 preset 数据是很划算的下一步；
+- **preset 没有内建输入**：`cin` 的范例要手动填输入框（早期跨项目测试里有一份 `PRESET_INPUTS` 可参考，见 git 历史）——把 `input` 放进 preset 数据是很划算的下一步；
 - 没有「.in 文件导入」、没有「导出执行过程」、没有分享链接；
 - 解释器每次改代码都要**重跑全部帧**（毫秒级，但大程序 × 大数组会感觉到）；没有增量编译/缓存；
 - 没有英文界面/英文文档（UI 是简体中文；文档以简体为主）。
@@ -410,7 +410,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 **P0（最划算、风险低）**
 1. **preset 自带范例输入**：给 `PRESETS` 的每项加可选 `input`，载入 preset 时自动填 cin 框（记得让快照失效）。测试：`presets-test` + 新增断言。
 2. **把 `long long` > 2^53 的静默失准改成警告**（或至少在教学文档里标注）。测试：`compat-test` 加一条。
-3. **CI 实测一次**：push 后看 Actions；若失败，多半是 Windows/Linux 路径或 `hkoi-presets-test` 的 SKIP 逻辑（应 SKIP 而非 FAIL）。
+3. **CI 实测一次**：push 后看 Actions；若失败，多半是 Windows/Linux 的路径或换行差异（golden 现在按 `\r?\n` 读取，跨平台一致）。
 
 **P1（教材驱动，做之前先问清楚需求）**
 4. `switch` 语句（最容易卡住学生抄范例）；
@@ -423,7 +423,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 9. 统一测试 harness（把剩下 28 个档换成 `test/_helpers.ts`，风险低但要逐档对呼叫端）。
 
 **P3（架构，非必要）**
-10. 把 `hkoi-presets-test` 的外部依赖改成「存在才跑」的可选 plugin（现在靠打包失败 → SKIP，够用但隐晦）；
+10. 把「浏览器行为」的验收从临时 CDP 探针升级成进 CI 的 e2e（Playwright）；
 11. `core.ts` 再拆（`execCall` / `sizeof` / 初始化列表）——**除非它又长到 1200+ 行，否则不建议**；
 12. `index.css` 拆档（先建立视觉回归再拆，否则容易改坏覆盖顺序）。
 
@@ -431,7 +431,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 
 ## 11. 接手第一天 checklist
 
-1. `npm install && npm run verify` —— 全绿再动任何代码（若 `hkoi-presets-test` 被 SKIP 是正常的）。
+1. `npm install && npm run verify` —— 全绿再动任何代码（Windows 下也应该是全绿）。
 2. 打开 `.trae`/`.cursor`/任何编辑器，按下 `npm run dev`，过一遍 §6.5 的 10 条手动验收。
 3. 读 `docs/ARCHITECTURE.md` §4（重构计划）与这份文件的 §5、§9。
 4. **动代码前先想清楚**：这是「行为变更」还是「纯重构」？
@@ -443,17 +443,17 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 
 ---
 
-## 12. 测试档索引（37 个，`npm test` 全跑）
+## 12. 测试档索引（36 个，`npm test` 全跑）
 
 | 类别 | 档案 | 覆盖 |
 |---|---|---|
 | 安全网 | `interp-golden-test` | 31 个程序的每帧 digest（重构必跑） |
 | 语言兼容性 | `compat-test` | 可用/不可用矩阵（约 70 条） |
-| 缺口/新功能 | `gap-test` | HKOI 第一/二优先的每一项 |
+| 缺口/新功能 | `gap-test` | 教学缺口清单第一/二优先的每一项 |
 | 渲染 | `render-test`, `render-limit-test`, `summary-test`, `aliasbadge-test`, `calllabel-test` | HTML 结构/规模上限/摘要文字/别名徽章/调用树标签 |
 | 面板 | `panellayout-test`, `editor-setup-test`, `appshell-test`, `crash-test` | 布局纯函数/缩排/整个 App 的 SSR/ErrorBoundary |
 | 解释器语义 | `cw-test`, `container-test`, `struct-test`, `struct-return-test`, `struct-container-test`, `arrayparam-test`, `rangefor-test`, `do-while-test`, `initlist-test`, `multivec-test`, `pair-test`, `setmap-test`, `stl-test`, `string-test`, `strfunc-test`, `stoi-test`, `sortcmp-test`, `cin-test`, `pushvar-test` | 各语言特性 |
-| 端到端 | `presets-test`, `hkoi-presets-test`, `graph-test`, `dijkstra-test`, `dijkstra-pq-test` | 每个 preset 执行+渲染；跨项目课程 preset（缺档会 SKIP） |
+| 端到端 | `presets-test`, `graph-test`, `dijkstra-test`, `dijkstra-pq-test` | 每个 preset 执行 + 渲染；图与最短路范例 |
 
 ---
 
