@@ -117,7 +117,8 @@ if (UPDATE || !existsSync(GOLDEN)) {
   console.log('已寫入 golden：' + GOLDEN + '（' + CASES.length + ' 個案例）')
 } else {
   const want = new Map<string, string>()
-  for (const line of readFileSync(GOLDEN, 'utf8').split(NL)) {
+  // Windows 上 checkout 成 CRLF（core.autocrlf），逐行比對前必须去掉行尾 \r
+  for (const line of readFileSync(GOLDEN, 'utf8').split(/\r?\n/)) {
     // 註解用 ' # '（井號加空格）；案例名稱可能是 '#define'，不能只判斷 '#' 開頭
     if (!line || line.startsWith('# ')) continue
     const parts = line.split('\t')
