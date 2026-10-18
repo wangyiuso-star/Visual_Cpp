@@ -56,7 +56,8 @@ npm run dev          # http://localhost:5173
 
 Windows 也可以直接双击 `start.bat`（会自动检查 Node、首次自动安装依赖）。
 
-上线：`npm run build`，把 `dist/` 丢到任意静态托管（GitHub Pages / Netlify / Vercel 都行）。
+上线：`npm run build`，把 `dist/` 丢到任意静态托管（Netlify / Vercel / GitHub Pages 都行）。
+> GitHub Pages **项目子路径**（`https://<user>.github.io/Visual_Cpp/`）需要在 `vite.config.ts` 设 `base: '/Visual_Cpp/'`，否则资源会 404；用自定义域名或根路径则不用改。
 
 ---
 
