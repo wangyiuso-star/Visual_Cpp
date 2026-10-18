@@ -1,4 +1,4 @@
-import { getLocale, setLocale, t, tf } from '../src/i18n'
+import { getLocale, localize, setLocale, t, tf } from '../src/i18n'
 
 let pass = 0
 let fail = 0
@@ -28,6 +28,14 @@ check('繁體：伫列/堆疊', t('调用栈') === '呼叫堆疊', t('调用栈'
 check('繁體：卡片摘要模板', tf('stack<{0}> · 长度 {1}', 'int', 3) === 'stack<int> · 長度 3')
 check('繁體：未知字串仍原樣輸出', t('這段字不在字典裡') === '這段字不在字典裡')
 check('繁體：步數標籤', tf('第 {0} / {1} 步', 2, 10) === '第 2 / 10 步')
+
+// ---------- 2b. 執行期報錯（localize）：片段替換，插值出來的數字要保留 ----------
+setLocale('zh-Hant')
+check('報錯：越界訊息', localize('下标 5 越界（长度 2）') === '索引 5 越界（長度 2）', localize('下标 5 越界（长度 2）'))
+check('報錯：cin 不足', localize('cin 输入不足：程式要读第 1 个值').indexOf('輸入不足') >= 0, localize('cin 输入不足：程式要读第 1 个值'))
+check('報錯：除數為 0', localize('除数为 0') === '除數為 0', localize('除数为 0'))
+check('報錯：純英文不受影響', localize('Unknown identifier x') === 'Unknown identifier x')
+check('報錯：簡體時原樣', (setLocale('zh-CN'), localize('下标 5 越界（长度 2）') === '下标 5 越界（长度 2）'))
 
 // ---------- 3. 切換會即時反映（同一個 key 兩種語言都拿得到） ----------
 setLocale('zh-CN')

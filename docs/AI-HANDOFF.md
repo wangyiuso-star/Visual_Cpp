@@ -3,7 +3,7 @@
 > **这份文件是写给「接手这个项目的下一个 AI 助手 / 下一个维护者」的。**
 > 它会随仓库一起提交（`docs/AI-HANDOFF.md`），所以内容按**公开可读**的标准写：不写会话内幕，只写现状、约定、怎么验证、哪里还不行。
 >
-> - 最后更新：2026-10-19（对应版本 **v0.14.0**）
+> - 最后更新：2026-10-19（对应版本 **v0.15.0**）
 > - 先读这一份；结构与设计细节见 [ARCHITECTURE.md](./ARCHITECTURE.md)，变更日志见 [HANDOFF.md](./HANDOFF.md)，已解决的疑难见 [DEBUG.md](./DEBUG.md)，语言子集细节见 [LANGUAGE-SUBSET.md](./LANGUAGE-SUBSET.md)
 
 ---
@@ -15,7 +15,7 @@
 | 是什么 | 浏览器内的 **C++ 代码逐步可视化**工具（OI / 算法教学用）：左边写 C++、右边实时画出变量/数组/容器/图/递归树，逐步高亮当前行与读写的格子 |
 | 形态 | **不是编译器、不是 GDB**：自己写的迷你解释器（lexer → parser → 生成器式 stepper）跑在浏览器里 |
 | 技术栈 | React 19 + Vite 8 + TypeScript + CodeMirror 6；无后端、无数据库 |
-| 规模 | `src/` 32 个文件 / 约 8200 行；`test/` 38 个测试文件 |
+| 规模 | `src/` 33 个文件 / 约 8300 行；`test/` 38 个测试文件 |
 | 跑起来 | `npm install` → `npm run dev` → http://localhost:5173 |
 | 三条命令 | `npm run dev`（开发）/ `npm test`（全部测试）/ `npm run verify`（typecheck + test + build，**提交前必跑**） |
 | 第一原则 | **宁可给出明确的错误，也绝不能静默给出错误答案**（详见 §5.1） |
@@ -334,6 +334,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl)          // node 22+ 内建
 | v0.12.0 | preset 自带 cin 输入（选中即填）；`long long` > 2^53 显示精度警告；与外部教学项目脱钩 |
 | v0.13.0 | `switch` / `case` / `default`（C++ fallthrough 语义、`break` 只在 switch 内生效）；新增 20 条测试 |
 | v0.14.0 | 界面简/繁切换（`src/i18n.ts`，香港慣用語，默认跟随浏览器语言） |
+| v0.15.0 | 解释器报错也繁化：`scripts/gen-i18n-hant.mjs` 扫出 266 条简体片段 → `src/i18n-messages.ts`，`localize()` 在显示层做片段替换（不改 250 个报错呼叫点） |
 
 ---
 
@@ -476,4 +477,4 @@ lambda、默认参数、`for` 标头里的逗号表达式、函数式转型 `dou
 
 ---
 
-*这份文件由 v0.14.0 收尾时整理。若你（下一个 AI）做了结构性改动，请把它更新到最新，并保留「已知不足」的诚实度——那是它最有价值的部分。*
+*这份文件由 v0.15.0 收尾时整理。若你（下一个 AI）做了结构性改动，请把它更新到最新，并保留「已知不足」的诚实度——那是它最有价值的部分。*

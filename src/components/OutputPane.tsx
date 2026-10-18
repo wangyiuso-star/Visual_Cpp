@@ -1,5 +1,5 @@
 import type { Snapshot } from '../interpreter/interpreter'
-import { t } from '../i18n'
+import { localize, t } from '../i18n'
 
 export interface OutputView {
   text: string
@@ -16,10 +16,10 @@ export interface OutputView {
  */
 export function outputView(cur: Snapshot | null, error: string | null): OutputView {
   if (cur) {
-    if (cur.error) return { text: cur.error, isError: true, warning: cur.warning }
+    if (cur.error) return { text: localize(cur.error), isError: true, warning: cur.warning }
     return { text: cur.output || t('(无输出)'), isError: false, warning: cur.warning }
   }
-  if (error) return { text: error, isError: true }
+  if (error) return { text: localize(error), isError: true }
   return { text: t('(尚未运行)'), isError: false }
 }
 

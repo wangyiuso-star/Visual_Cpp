@@ -22,6 +22,7 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - `test/` — 38 个测试档（`npm test`）；`test/_helpers.ts` 是共用样版（`_` 开头不会被当测试档）
 - `docs/` — 文档（见上面链接）
 - `scripts/run-tests.mjs` — 测试执行器（rolldown 打包 → node 逐档执行）
+- `scripts/gen-i18n-hant.mjs` — 扫 `src/` 的简体片段，用 opencc-js 转繁体 + 港台用語覆蓋，生成 `src/i18n-messages.ts`（供 `localize()` 顯示期替換）。**新增/修改报错文案后要重跑：`node scripts/gen-i18n-hant.mjs`**
 
 ## 关键约定
 - **构建/运行/验证**：

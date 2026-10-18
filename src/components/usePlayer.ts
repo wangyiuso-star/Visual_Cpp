@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { parse } from '../interpreter/parser'
 import { run } from '../interpreter/interpreter'
 import type { Snapshot } from '../interpreter/interpreter'
-import { t, tf } from '../i18n'
+import { localize, t, tf } from '../i18n'
 
 /** 執行一次 collect() 需要的全部輸入。任何一個改了，舊快照就必須失效。 */
 export interface RunConfig {
@@ -70,7 +70,7 @@ export function usePlayer(config: RunConfig): Player {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       const line = (e as { line?: number }).line
-      setError(line ? tf('第 {0} 行：{1}', line, msg) : msg)
+      setError(localize(line ? tf('第 {0} 行：{1}', line, msg) : msg))
       return null
     }
   }

@@ -37,7 +37,7 @@
 
 **执行与交互**：运行 / 暂停 / 单步 / 后退 / 跳到第 N 步 / 速度滑条；行号断点；快捷键（空格、←/→、R）；cin 输入预填；26 个内置示例；草稿自动保存。
 
-**界面语言**：简体 / 繁體（香港慣用語）切换，默认跟随浏览器语言（`zh-HK` / `zh-TW` → 繁體）；入口在「设置 → 语言」。
+**界面语言**：简体 / 繁體（香港慣用語）切换，默认跟随浏览器语言（`zh-HK` / `zh-TW` → 繁體）；入口在「设置 → 语言」。**解释器的报错文案也一并繁化**（266 条片段表，由 `scripts/gen-i18n-hant.mjs` 生成）。
 
 **右侧数据面板**
 - 当前行高亮；读 = 蓝、写 = 绿、判断 = 橙；判读横幅（「判断 i ≤ mid ✓ 为真 · 继续」）
@@ -75,7 +75,8 @@ src/components/    CodeEditor、VariablesPanel（面板壳）
                    viz/（window / containers / graph / tree / format）
                    usePlayer（播放器状态机）、Topbar、Splitter、OutputPane、ErrorBoundary
 src/App.tsx        主壳：版面 + 接线 + 全局快捷键 +「⇔ 自动并排」
-src/i18n.ts        简/繁字典（简体原文当 key，缺字串自动回退）
+src/i18n.ts        简/繁字典（简体原文当 key，缺字串自动回退）+ localize()
+src/i18n-messages.ts  报错片段表（脚本生成，266 条）
 src/presets.ts     26 个内置示例
 test/              38 个测试文件（语义 / 渲染 / 布局 / golden / 兼容矩阵）
 ```

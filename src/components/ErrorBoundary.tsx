@@ -1,6 +1,6 @@
 import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
-import { t } from '../i18n'
+import { localize, t } from '../i18n'
 
 // 渲染期抛错时，React 会把整棵树卸掉 —— 使用者看到的就是「黑屏 / 白屏」，
 // 而且完全不知道发生什么事、也不知道要回报什么。
@@ -16,7 +16,7 @@ export function describeCrash(e: unknown): CrashInfo {
   const err = e instanceof Error ? e : new Error(String(e))
   return {
     title: t('内部错误（这是本工具的 bug，不是你程式写错）'),
-    detail: err.message || String(e),
+    detail: localize(err.message || String(e)),
     stack: err.stack,
   }
 }

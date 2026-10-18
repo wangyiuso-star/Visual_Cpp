@@ -10,6 +10,7 @@
 // 語言選擇存在 localStorage（cpp-viz.locale）；第一次開啟時看瀏覽器語言
 // （zh-HK / zh-TW / zh-MO / 任何 Hant → 繁體，其餘 → 繁體以外的預設簡體）。
 import { useSyncExternalStore } from 'react'
+import { HANT_MESSAGES } from './i18n-messages'
 
 export type Locale = 'zh-CN' | 'zh-Hant'
 
@@ -213,6 +214,22 @@ export function useLocale(): Locale {
 export function t(text: string): string {
   if (current === 'zh-CN') return text
   return HANT[text] ?? text
+}
+
+/**
+ * 把「執行期字串」（例如直譯器報錯）轉成目前語言。
+ *
+ * 報錯是「靜態片段 + 插值」拼出來的（`'下标 ' + i + ' 越界（长度 ' + n + '）'`），
+ * 沒辦法用整句查表；所以 scripts/gen-i18n-hant.mjs 把所有靜態片段收集成對照表，
+ * 這裡按「長片段優先」逐個替換。簡體時直接原樣回傳，零成本。
+ */
+export function localize(text: string): string {
+  if (current === 'zh-CN' || !text) return text
+  let out = text
+  for (const [from, to] of HANT_MESSAGES) {
+    if (out.indexOf(from) >= 0) out = out.split(from).join(to)
+  }
+  return out
 }
 
 /** 帶參數的版本：模板裡用 {0} {1} 佔位，例如 tf('第 {0} 行：{1}', line, msg)。 */
