@@ -2,24 +2,26 @@
 
 > 2026-08-17 起盤點，之後每完成一個重構步驟就更新這一份（進度見 §4）。每一輪功能都往同幾個檔案裡塞，這份是「現在長什麼樣、哪裡該拆、為什麼」。
 > 原則：**先抽出可測的純函式，再搬檔案**；每次搬完一定要 `npm test`（37 個測試檔會把所有 preset 的每一個畫面都渲染一次，是搬檔案的安全網）。
+>
+> 交接總綱見 [AI-HANDOFF.md](./AI-HANDOFF.md)；語言子集規格見 [LANGUAGE-SUBSET.md](./LANGUAGE-SUBSET.md)。
 
-## 1. 現況（v0.10.0 + 重構 S0–S6）
+## 1. 現況（v0.11.2）
 
 | 檔案 | 行數 | 角色 |
 |---|---|---|
 | `src/interpreter/builtins.ts` | 1044 | 全部內建（sort / 數學 / stoi / 字串與容器方法 / memset / sizeof / fill…）—— S4 抽出 |
-| `src/interpreter/parser.ts` | 1019 | 語法分析（含 typedef/#define/cast/comparator 等各種語法） |
-| `src/interpreter/core.ts` | **826** | 執行引擎：求值 `evalExpr` / 敘述 `execStmt` / 呼叫 `execCall`（三者互相遞迴，必須同檔）—— S6 抽出 |
-| `src/index.css` | 715 | 全部樣式 |
+| `src/interpreter/parser.ts` | 1020 | 語法分析（含 typedef/#define/cast/comparator 等各種語法） |
+| `src/interpreter/core.ts` | **828** | 執行引擎：求值 `evalExpr` / 敘述 `execStmt` / 呼叫 `execCall`（三者互相遞迴，必須同檔）—— S6 抽出 |
+| `src/index.css` | 718 | 全部樣式 |
 | `src/interpreter/values.ts` | 634 | 值轉換與比較的純函式（`num`/`coerceTo`/`cmp`/`applyBinary`/`toStringVal`/`formatDouble`…）—— S2 抽出 |
 | `src/components/viz/tree.tsx` | 534 | 樹 / BST / 堆 / 呼叫樹 + 共用縮放視口 |
-| `src/App.tsx` | **206** | 主殼：只負責版面與接線（播放/單步在 `usePlayer`、工具列在 `Topbar`、輸出在 `OutputPane`、分割線在 `Splitter`）—— S7 從 493 行拆下來 |
-| `src/components/VariablesPanel.tsx` | 487 | 面板外殼（卡片、拖動、縮放、全寬）—— v0.10.0 從 1983 行拆下來的 |
-| `src/components/viz/window.tsx` | 334 | 一維／二維／struct 矩陣視窗 + 共用的 `useWindowOffset` |
+| `src/App.tsx` | **257** | 主殼：只負責版面與接線（播放/單步在 `usePlayer`、工具列在 `Topbar`、輸出在 `OutputPane`、分割線在 `Splitter`）—— S7 從 493 行拆下來 |
+| `src/components/VariablesPanel.tsx` | 521 | 面板外殼（卡片、拖動、縮放、全寬）—— v0.10.0 從 1983 行拆下來的 |
+| `src/components/viz/window.tsx` | 338 | 一維／二維／struct 矩陣視窗 + 共用的 `useWindowOffset` |
 | `src/components/viz/containers.tsx` | 310 | string / stack / queue / deque / set / map / struct / pair 檢視 |
 | `src/interpreter/interpreter.ts` | **113** | 只剩 `run()`（公開入口）+ 公開型別轉出（`Snapshot` / `CallNode` / `RunOptions` / `RuntimeError`）—— 從 2930 行一路降到這裡 |
 | `test/_helpers.ts` | 73 | 測試共用樣板（`check` / `eq` / `err` / `run1` / `report`）—— S9 新增，不算測試檔 |
-| 其他 | ~930 | lexer(348) / memory(193) / snapshot(159) / ast(121) / runtime(118) / cells(77) / input(53) / CodeEditor / panelLayout / editorSetup / graphLimit / ErrorBoundary / presets |
+| 其他 | ~1000 | lexer(348) / memory(193) / snapshot(159) / ast(121) / runtime(118) / cells(77) / input(53) / CodeEditor / panelLayout / editorSetup / graphLimit / ErrorBoundary / presets |
 
 ### v0.10.0 做了什麼
 
@@ -47,13 +49,13 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 
 仍然可以再拆的：`core.ts` 826 行裡的 `execCall`（函式呼叫與參數綁定）和 `sizeofOperand` / `applyStructInit` 都是獨立的主題，等它再變胖再說。
 
-### (B) `App.tsx` —— **已做完（S7）**，493 → 206 行
+### (B) `App.tsx` —— **已做完（S7）**，493 → 206 行（v0.11.2 加了「自動並排」後是 257 行）
 | 新模組 | 行數 | 內容 |
 |---|---|---|
 | `components/usePlayer.ts` | 187 | 播放器狀態與動作（collect / start / step / play / reset / jump / 斷點）+ 三個 effect + `invalidate()` |
-| `components/Topbar.tsx` | 150 | 工具列 JSX（執行控制、速度、設定選單、步數、跳步） |
+| `components/Topbar.tsx` | 153 | 工具列 JSX（執行控制、速度、設定選單、步數、跳步） |
 | `components/Splitter.tsx` | 100 | `<Splitter>` + `useVerticalDrag` + `useStackDrag` |
-| `components/OutputPane.tsx` | 31 | 輸出面板 + 純函式 `outputView()` |
+| `components/OutputPane.tsx` | 32 | 輸出面板 + 純函式 `outputView()` |
 
 **這層現在也有自動化測試了**：`test/appshell-test.ts`（23 項）包含用 `react-dom/server` 把整個 `<App/>` 渲染一次（以前只靠 build + 手動開瀏覽器）。
 
@@ -77,7 +79,7 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 
 **還沒遷移的**（其餘 28 個）：它們各自有**不同簽章與語意**的自訂迷你 harness —— `eq` 至少三種（`(name, code, want)` 跑程式比輸出 / `(actual, expected, name)` 比字串 / `(name, code, want, input)`）、`err` 兩種（比對訊息片段的第二個參數位置不同）、`run1` 回傳形狀也不同（`Snapshot` / `{out, err, snaps}`）。逐檔換要一個一個對呼叫端，屬於後續可選工作，不影響正確性。
 
-### (E) `index.css` 715 行
+### (E) `index.css` 718 行
 暫時不建議拆：CSS 拆檔只會多出 import 順序的坑（這份檔案有幾處是刻意靠「後面的規則覆蓋前面的」在運作的，例如 `.card-wide` 蓋 `.var`）。等它超過 ~1000 行或出現主題切換需求再說。
 
 ## 3. 幾條已經被驗證有效的規矩（請繼續遵守）
@@ -109,7 +111,7 @@ snapshot.ts  builtins.ts  cells.ts  values.ts  input.ts  runtime.ts  （memory /
 | **S4** | 抽出 `interpreter/builtins.ts`：`execCall` 裡的**全部內建**（sort / 數學 / stoi / 字串與容器方法 / memset / sizeof / fill…）—— 最大的一塊 | 新檔 + `interpreter.ts` | golden |
 | **S5** ✅ | 抽出 `interpreter/snapshot.ts`（157 行）：`dumpAll` / `collectLocals` / `updateActiveLocals` / `mark` / `markCondition` / `formatCellValue` + 呼叫樹工具。**原計畫的 `stmts.ts` 併進 S6** —— 它和求值互相遞迴，單獨拆會循環 import | 新檔 + `interpreter.ts` | golden ✅（`d9cb389`） |
 | **S6** ✅ | 抽出 `interpreter/core.ts`（826 行）：`sizeofOperand` / `applyStructInit` / `resolveTarget` / `evalExpr` / `execAssign` / `execUpdate` / `execCall` / `execMethodCall` / `execDecl` / `execBlock` / `cinReadTargets` / `execStmt`（**求值 + 敘述 + 呼叫同檔**，理由見 §2A）。`interpreter.ts` 933 → **113 行**，只剩 `run()` + 型別轉出 | 新檔 + `interpreter.ts` | golden ✅（31 檔全過、`tsc` 仍 31） |
-| **S7** ✅ | `App.tsx` 493 → 206 行：`usePlayer.ts`（187）/ `Topbar.tsx`（150）/ `Splitter.tsx`（100）/ `OutputPane.tsx`（31，含純函式 `outputView`）。新增 `test/appshell-test.ts`（23 項，含整個 `<App/>` 的 SSR 渲染煙霧測試） | 4 新檔 + `App.tsx` | 37 檔全過 ✅ + tsc 仍 31 + dev server 五個新模組都 200 |
+| **S7** ✅ | `App.tsx` 493 → 206 行（v0.11.2 後 257）：`usePlayer.ts`（187）/ `Topbar.tsx`（150）/ `Splitter.tsx`（100）/ `OutputPane.tsx`（31，含純函式 `outputView`）。新增 `test/appshell-test.ts`（23 項，含整個 `<App/>` 的 SSR 渲染煙霧測試） | 4 新檔 + `App.tsx` | 37 檔全過 ✅ + tsc 仍 31 + dev server 五個新模組都 200 |
 | **S8** ✅ | `memory.ts` 加 `asIndexable()` / `elemTypeOf()`、`ast.ts` 加 `AssignExpr` / `UpdateExpr`，清掉**全部 31 個**型別錯誤（做法見 §2C）；`package.json` 加 `verify`（typecheck + test + build）。順手把「不能下標的容器」從 undefined 崩潰改成明確 RuntimeError，並補 5 條 `compat-test` 斷言 | `memory.ts` / `ast.ts` / `core.ts` / `builtins.ts` / `cells.ts` / `parser.ts` / `viz/*` / `VariablesPanel.tsx` / `CodeEditor.tsx` / `package.json` | `npm run typecheck` = 0 ✅ + 37 檔全過 ✅ |
 | **S9** ✅ | 新增 `test/_helpers.ts`（`check` / `eq` / `run1` / `out` / `err` / `report`），把**樣板一字不差的 9 個測試檔**遷移過去（其餘 28 個的自訂 harness 簽章不一，列為後續可選，見 §2D） | `test/_helpers.ts` + 9 個測試檔 | 37 檔全過 ✅ + `npm run typecheck` 0 ✅ |
 

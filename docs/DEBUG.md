@@ -59,8 +59,11 @@
 - src/App.tsx：首次进入按 window.innerWidth < 1500 决定默认分割比（50% / 55%）。
 **验证**：npm run build exit 0；dev 探 http://localhost:5173/ 返回 200；产物 CSS 含 3 组媒体查询 + @container (width<=680px) + container-type:inline-size；回归 15 个测试全过；test/calllabel-test.ts 验证标签为 fib(5)/show(7)。
 
-## ⚠️ 已知既存问题（非本次引入）：npm run typecheck 约 90 个类型错误
-分布：interpreter.ts 71 / VariablesPanel.tsx 17 / parser.ts 1 / CodeEditor.tsx 1。全部是联合类型未收窄（访问 expr.args、cell.cells、cell.elemType、Event.button）。原因是 vite build 只做转译不做类型检查，所以一直未被发现。不影响运行；清理时需逐个加 kind 判断收窄或类型谓词。
+## ✅ 已解决：`npm run typecheck` 约 90 个类型错误（v0.11.0 / S8）
+**最终状态**：0 错误（`npm run verify` 已把它纳入发版闸门）。
+**根因**：`vite build` 只做转译、不做类型检查，所以这批错误一直没被发现；几乎全是联合类型未收窄（访问 `expr.args`/`cell.cells`/`cell.elemType`/`Event.button`）。
+**修法**（详见 `docs/ARCHITECTURE.md` §2C）：`memory.ts` 加 `asIndexable()`/`elemTypeOf()`、`ast.ts` 加 `AssignExpr`/`UpdateExpr`、可变的 `members` 数组明确标型别、`parser.ts` 的 `arraySizes` 标成 `(Expr | undefined)[]`、CodeMirror gutter 的事件收窄成 `MouseEvent`。
+**教训**：以后 `npm run build` 通过**不代表**类型是对的；提交前跑 `npm run verify`。
 ## ✅ 已解决：递归树调用时无法自动跟随（2026-08-16）
 
 **现象**：递归/调用树在递归调用时不会自动跟随当前活动节点，节点跑到视野外就看不见了。

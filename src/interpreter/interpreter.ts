@@ -1,5 +1,5 @@
 // 對外入口：只放 run()（把程式跑成一個 Snapshot 序列）與公開型別的轉出。
-// 執行引擎在 core.ts，各層職責見 ARCHITECTURE.md。
+// 執行引擎在 core.ts，各層職責見 docs/ARCHITECTURE.md。
 import { ReturnSignal, RuntimeError } from './runtime'
 import type { RunOptions, Runtime, Snapshot } from './runtime'
 import { cloneCallTree, dumpAll } from './snapshot'

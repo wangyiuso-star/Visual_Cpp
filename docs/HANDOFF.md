@@ -1,6 +1,11 @@
 # HANDOFF.md — 项目详细状态档案
 
 ## 最近更新
+- 2026-10-19：**開源上架整理（v0.11.2，未改程式行為）**。把專案整理成可以公開的個人專案：
+  - **文件結構**：`ARCHITECTURE.md` / `HANDOFF.md` / `DEBUG.md` 移進 `docs/`；新增 **`docs/AI-HANDOFF.md`（交接總綱）** 與 **`docs/LANGUAGE-SUBSET.md`（語言子集完整參考）**；刪掉 AI 工作階段留下的草稿檔（`*.template.md`、`CHECKPOINT-2026-08-16.md`、`PROJECT_REVIEW.md`，內容已併入上面兩份）。
+  - **對外門面**：`README.md` 重寫（含兩張實機截圖 `docs/screenshot-*.png`、快速開始、功能一覽、限制摘要、文件索引）；新增 `LICENSE`（MIT）；`package.json` 補 description/keywords/license/repository；`index.html` 補 meta description 與 inline SVG favicon。
+  - **工程**：新增 `.github/workflows/ci.yml`（`npm ci` → typecheck → test → build）；`.gitignore` 重寫（原本的註解是亂碼）。
+  - **驗證**：`npm run verify` 全綠（37 檔測試、typecheck 0、build 過）；截圖是用 headless Chrome + CDP 在 1600×900 @2x 實拍（歸併排序 第 58/283 步、Dijkstra 第 78/130 步）。
 - 2026-08-17：**發布 v0.11.2 —— 新增「⇔ 自動並排」按鈕（右側面板標題列）**（使用者：「我把中綫往左拖，還是不會自己并排，你出一個按鈕，按完就是自己調整寬度並排」）。
   - **為什麼拖中線還是沒用**：`wide`（⤢ 手動整行）與 `zoom`（放大 >100%）都**存在 localStorage** 裡，而且兩者都會讓 `isWide()` **無視面板寬度**。所以在 v0.11.1 修好自動判斷之後，只要卡片上有舊的手動設定，拖多寬都還是佔整行（我在 headless Chrome 裡把 `localStorage['cpp-viz.panel-layout']` 設成 `{zoom:{'@calltree':1.3},wide:{'@calltree':true}}` 就重現了）。
   - **按鈕做三件事**（一次點擊全部解決）：

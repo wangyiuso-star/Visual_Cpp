@@ -1,8 +1,17 @@
+# 依賴 / 建置產物
 node_modules/
 dist/
 .npm-cache/
 .tmp/
-test/*.cjs
+
+# 測試打包產物（scripts/run-tests.mjs 會產生 test/*.mjs）
 test/*.mjs
-# 診斷/臨時腳本放這裡（test/ 底下每個 .ts 都會被 npm test 當成測試檔）
+test/*.cjs
+
+# 診斷 / 臨時腳本（test/ 底下每個 .ts 都會被當成測試檔，所以放這裡；也可以用 _ 前綴）
 tmp/
+
+# 編輯器 / 系統
+.DS_Store
+Thumbs.db
+*.log
