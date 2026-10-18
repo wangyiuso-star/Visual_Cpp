@@ -4,6 +4,10 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ErrorBoundary, { CrashCard, describeCrash } from '../src/components/ErrorBoundary'
 
+// 測試要在固定語言下跑：這台機器的 navigator.language 可能是 zh-HK（繁體），斷言的是簡體字串
+import { setLocale } from '../src/i18n'
+setLocale('zh-CN')
+
 // 「黑屏」防护：渲染期抛错时 React 会把整棵树卸掉，使用者只看到一片空白，
 // 也不知道要回报什么。ErrorBoundary + CrashCard 把这种错误变成看得懂的一则讯息。
 // 注：React 的 SSR（renderToStaticMarkup）不支援 error boundary，所以「接住」这一步在 node 端测不到，

@@ -5,6 +5,7 @@ import type { Cell, VarView } from '../../interpreter/memory'
 import { cellCls, formatCellShort, formatScalar, isHit } from './format'
 import { Windowed2D } from './window'
 import { GRAPH_MAX_NODES, graphTooBigReason } from '../graphLimit'
+import { t } from '../../i18n'
 
 /** 找同時顯示、長度相同的「距離陣列」（dist / d / dp…），圖上的節點標籤要顯示它的值。 */
 export function companionArray(name: string, N: number, vars: VarView[]): Cell[] | null {
@@ -185,7 +186,7 @@ export function AdjListView({
   return (
     <div>
       <button className="adj-toggle" onClick={() => setShowTable((s) => !s)}>
-        {showTable ? '查看图' : '查看表格'}
+        {t(showTable ? '查看图' : '查看表格')}
       </button>
       {showTable ? (
         <Windowed2D name={name} path={path} cell={cell} reads={reads} writes={writes} judges={judges} focus={focus} />

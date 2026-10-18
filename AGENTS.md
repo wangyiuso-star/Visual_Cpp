@@ -16,9 +16,10 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - `src/interpreter/` — `lexer` → `parser` → `ast`；`core`（求值/语句/调用，三者互相递回必须同档）；`builtins`（全部内建与方法）；`memory`（递归不可变 Cell + 写时复制）；`values`/`cells`/`input`/`snapshot`/`runtime`；`interpreter.ts` **只有 `run()` + 公开型别转出**
 - `src/components/` — `CodeEditor`、`VariablesPanel`（面板壳）、`viz/{window,containers,graph,tree,format}`、`usePlayer`（播放器状态机）、`Topbar`、`Splitter`、`OutputPane`、`ErrorBoundary`、`panelLayout`/`editorSetup`/`graphLimit`
 - `src/App.tsx` — 主壳：版面 + 接线 + 全局快捷键 +「⇔ 自动并排」
+- `src/i18n.ts` — 界面简/繁字典（简体原文当 key）+ 语言状态；切语言用 `useLocale()` 订阅
 - `src/index.css` — 全部样式（含窄屏/窄面板 `@media`、`@container`、卡片网格）
 - `src/presets.ts` — 26 个课堂示例
-- `test/` — 37 个测试档（`npm test`）；`test/_helpers.ts` 是共用样版（`_` 开头不会被当测试档）
+- `test/` — 38 个测试档（`npm test`）；`test/_helpers.ts` 是共用样版（`_` 开头不会被当测试档）
 - `docs/` — 文档（见上面链接）
 - `scripts/run-tests.mjs` — 测试执行器（rolldown 打包 → node 逐档执行）
 
@@ -40,7 +41,8 @@ React 19 + Vite 8 + TypeScript + CodeMirror 6（@uiw/react-codemirror + @codemir
 - **语言**：int/long long/char/bool/string/double/float；数组(1D/2D)、vector(1D/2D/多维/邻接表)、stack、queue、deque、priority_queue、tree、bst、set、map、umap、pair、struct；声明/赋值/++--/for/range-for/while/do-while/if-else/switch/break/continue/return/cout/cin；自订函数+递归+全局变量+引用/const&/数组形参；内建 sort/reverse/lower_bound/swap/数学/字符函数/stoi/to_string/memset/fill/区间写法/#define/typedef/sizeof/三目/fixed+setprecision
 - **可视化**：当前行高亮、读写/判断着色、global/local 标签、递归树（返回变暗+返回值+缩放+调用栈模式+跟随）、数组窗口（1D 自适应 / 2D 固定 5×5 + 写入跳转）、图（带权/箭头/节点值）、堆/树/BST 树形图、struct 矩阵、别名徽章、排序比较次数
 - **交互**：运行/暂停/单步/后退/跳步/速度、断点、cin 预填、卡片拖动排序+单卡缩放+整行宽+持久化、多卡自动并排 +「⇔ 自动并排」按钮、Tab 缩排 2/4、快捷键、ErrorBoundary 防白屏
-- **工程**：解耦重构 S0–S9（interpreter 2930 → 113 行、App 493 → 257 行）、`tsc` 0 错误、37 个测试档 + `npm run verify`、CI workflow
+- **界面**：簡/繁切换（香港慣用語），默认跟随浏览器语言（v0.14.0）
+- **工程**：解耦重构 S0–S9（interpreter 2930 → 113 行、App 493 → 257 行）、`tsc` 0 错误、38 个测试档 + `npm run verify`、CI workflow
 - 逐版本历史见 `docs/HANDOFF.md`；架构与重构记录见 `docs/ARCHITECTURE.md`
 
 ## 下一步（优先级）

@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import { asIndexable } from '../../interpreter/memory'
 import type { Cell, VarView } from '../../interpreter/memory'
 import { VIEW_MAX_ITEMS, WIN_1D, WIN_2D, cellCls, formatCellShort, isHit, rowLen } from './format'
+import { t, tf } from '../../i18n'
 
 export function HiddenNote({ hidden, total }: { hidden: number; total: number }) {
   return (
     <div className="viz-empty" style={{ padding: '4px 0' }}>
-      … 还有 {hidden} 项未显示（共 {total} 项；面板一次最多画 {VIEW_MAX_ITEMS} 项，避免页面卡住）
+      {tf('… 还有 {0} 项未显示（共 {1} 项；面板一次最多画 {2} 项，避免页面卡住）', hidden, total, VIEW_MAX_ITEMS)}
     </div>
   )
 }
@@ -87,7 +88,7 @@ export function StructArrayView({
       <div className="grid2d-row">
         {rows > WIN_2D && (
           <div className="row-slider-wrap">
-            <span className="window-dim">行</span>
+            <span className="window-dim">{t('行')}</span>
             <input
               type="range"
               min={0}
@@ -133,9 +134,9 @@ export function StructArrayView({
       </div>
       {maxCols > WIN_2D && (
         <div className="window-control">
-          <span className="window-dim">列</span>
+          <span className="window-dim">{t('列')}</span>
           <input type="range" min={0} max={maxColOff} value={cStart} onChange={(e) => setOff((o) => ({ ...o, c: Number(e.target.value) }))} className="cell-slider" />
-          <span className="window-range">[{cStart}..{Math.min(cStart + WIN_2D, maxCols) - 1}] / 共 {maxCols}</span>
+          <span className="window-range">{tf('[{0}..{1}] / 共 {2}', cStart, Math.min(cStart + WIN_2D, maxCols) - 1, maxCols)}</span>
         </div>
       )}
     </div>
@@ -226,7 +227,7 @@ export function Windowed1D({
       {len > cols && (
         <div className="window-control">
           <input type="range" min={0} max={maxOff} value={start} onChange={(e) => setOff(Number(e.target.value))} className="cell-slider" />
-          <span className="window-range">[{start}..{end - 1}] / 共 {len}</span>
+          <span className="window-range">{tf('[{0}..{1}] / 共 {2}', start, end - 1, len)}</span>
         </div>
       )}
     </div>
@@ -271,7 +272,7 @@ export function Windowed2D({
       <div className="grid2d-row">
         {rows > WIN_2D && (
           <div className="row-slider-wrap">
-            <span className="window-dim">行</span>
+            <span className="window-dim">{t('行')}</span>
             <input
               type="range"
               min={0}
@@ -326,9 +327,9 @@ export function Windowed2D({
       </div>
       {maxCols > WIN_2D && (
         <div className="window-control">
-          <span className="window-dim">列</span>
+          <span className="window-dim">{t('列')}</span>
           <input type="range" min={0} max={maxColOff} value={cStart} onChange={(e) => setOff((o) => ({ ...o, c: Number(e.target.value) }))} className="cell-slider" />
-          <span className="window-range">[{cStart}..{Math.min(cStart + WIN_2D, maxCols) - 1}] / 共 {maxCols}</span>
+          <span className="window-range">{tf('[{0}..{1}] / 共 {2}', cStart, Math.min(cStart + WIN_2D, maxCols) - 1, maxCols)}</span>
         </div>
       )}
     </div>

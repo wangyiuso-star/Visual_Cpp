@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { parse } from '../interpreter/parser'
 import { run } from '../interpreter/interpreter'
 import type { Snapshot } from '../interpreter/interpreter'
+import { t, tf } from '../i18n'
 
 /** 執行一次 collect() 需要的全部輸入。任何一個改了，舊快照就必須失效。 */
 export interface RunConfig {
@@ -69,7 +70,7 @@ export function usePlayer(config: RunConfig): Player {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       const line = (e as { line?: number }).line
-      setError(line ? '第 ' + line + ' 行：' + msg : msg)
+      setError(line ? tf('第 {0} 行：{1}', line, msg) : msg)
       return null
     }
   }
@@ -175,7 +176,7 @@ export function usePlayer(config: RunConfig): Player {
 
   const cur = snapshots && index >= 0 ? snapshots[index] : null
   const activeLine = cur ? cur.line : -1
-  const stepLabel = snapshots && index >= 0 ? '第 ' + (index + 1) + ' / ' + snapshots.length + ' 步' : '未运行'
+  const stepLabel = snapshots && index >= 0 ? tf('第 {0} / {1} 步', index + 1, snapshots.length) : t('未运行')
 
   return {
     snapshots, index, playing, speed, error, breakpoints, jumpVal,

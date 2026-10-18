@@ -5,7 +5,7 @@
 >
 > 交接總綱見 [AI-HANDOFF.md](./AI-HANDOFF.md)；語言子集規格見 [LANGUAGE-SUBSET.md](./LANGUAGE-SUBSET.md)。
 
-## 1. 現況（v0.13.0）
+## 1. 現況（v0.14.0）
 
 | 檔案 | 行數 | 角色 |
 |---|---|---|

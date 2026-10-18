@@ -20,14 +20,14 @@
 - **cpp-viz**｜个人项目｜TypeScript / React 19 / Vite 8｜2026
   从零实现 C++ 子集解释器（lexer → parser → AST → 生成器式执行器），以「每语句一份不可变快照 + 界面回放」实现单步、**后退**、跳步与断点，纯前端部署（866 KB，gzip 271 KB）。
   设计递归不可变内存模型（写时复制），支撑大数组数千步回放；建立 golden 特性化测试（31 个程序逐帧摘要）作为重构安全网，把解释器核心从 2,930 行拆分到 113 行而语义零回归，`tsc` 类型错误 31 → 0。
-  交付 37 个测试文件 / 2,573 行测试、26 个内置示例、一份可离线双击运行的单文件版本。
+  交付 37 个测试文件 / 2,573 行测试、26 个内置示例、界面简繁双语（香港慣用語，跟随浏览器语言），以及一份可离线双击运行的单文件版本。
 
 **English (3 bullets)**
 
 - **cpp-viz** — Personal project · TypeScript, React 19, Vite 8 · 2026
   Built a C++ subset interpreter from scratch (lexer → parser → AST → generator-based evaluator) and a replay-based visualiser: one immutable snapshot per statement makes step-back, jump-to-step and breakpoints free — no compiler, debugger or backend (866 KB bundle, 271 KB gzipped).
   Designed a persistent, copy-on-write memory model so thousands of steps over large arrays stay cheap; introduced golden characterisation tests (per-frame digests for 31 programs) as a refactoring safety net, splitting a 2,930-line interpreter core into 113 lines with zero behavioural change and clearing 31 → 0 type errors.
-  Shipped 37 test files (2,573 lines), 26 built-in examples, and a single-file offline build.
+  Shipped 37 test files, 26 built-in examples, a Simplified/Traditional Chinese UI (HK terminology, auto-detected from the browser), and a single-file offline build.
 
 ---
 

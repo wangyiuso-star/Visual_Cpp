@@ -4,7 +4,7 @@
 > 当前行高亮，读 = 蓝 / 写 = 绿 / 判断 = 橙，可前进、后退、跳步、断点。
 > **纯前端、零后端**：一个静态站点（866 KB，gzip 271 KB），也可以内联成**单个 HTML 文件**离线跑。
 
-**English.** cpp-viz is a browser-based C++ stepping visualiser I built from scratch. It ships a hand-written lexer → parser → AST, plus a generator-based interpreter that yields one immutable `Snapshot` per statement; the React UI is just a player that replays `snapshots[i]`. That design makes stepping *backwards*, jumping to step N, and breakpoints free — nothing is re-executed. No compiler, no debugger, no server: 31 source files / ~8k lines of TypeScript, 37 test files, 26 built-in examples.
+**English.** cpp-viz is a browser-based C++ stepping visualiser I built from scratch. It ships a hand-written lexer → parser → AST, plus a generator-based interpreter that yields one immutable `Snapshot` per statement; the React UI is just a player that replays `snapshots[i]`. That design makes stepping *backwards*, jumping to step N, and breakpoints free — nothing is re-executed. No compiler, no debugger, no server: 31 source files / ~8k lines of TypeScript, 38 test files, 26 built-in examples, UI localised in Simplified and Traditional Chinese (HK terminology, follows browser language).
 
 ![归并排序：左侧代码与当前行高亮，右侧递归树、局部变量与数组](docs/screenshot-recursion.png)
 
@@ -37,12 +37,15 @@
 
 **执行与交互**：运行 / 暂停 / 单步 / 后退 / 跳到第 N 步 / 速度滑条；行号断点；快捷键（空格、←/→、R）；cin 输入预填；26 个内置示例；草稿自动保存。
 
+**界面语言**：简体 / 繁體（香港慣用語）切换，默认跟随浏览器语言（`zh-HK` / `zh-TW` → 繁體）；入口在「设置 → 语言」。
+
 **右侧数据面板**
 - 当前行高亮；读 = 蓝、写 = 绿、判断 = 橙；判读横幅（「判断 i ≤ mid ✓ 为真 · 继续」）
 - 数组（1D 滑动窗口 / 2D 固定 5×5 + 写入自动跳转）、vector（含多维 / 邻接表）、stack、queue、deque、priority_queue（堆树）、tree、bst、set、map、struct、pair
 - 邻接表自动识别成**图**（带权边、箭头、节点值覆盖），图过大自动降级为表格
 - **递归树**：节点高亮、返回后变暗并显示返回值、「调用栈」模式、可缩放
 - 卡片可拖动排序 / 单卡缩放 / 整行宽 / **⇔ 自动并排**，布局记在 localStorage
+- **界面语言：简体 / 繁體（香港慣用語）**，默认跟随浏览器（`zh-HK` / `zh-TW` → 繁體），可在「设置 → 语言」切换
 - global / local 作用域标签；引用参数与数组形参标「别名」；排序时显示比较次数
 
 ## 快速开始
@@ -72,8 +75,9 @@ src/components/    CodeEditor、VariablesPanel（面板壳）
                    viz/（window / containers / graph / tree / format）
                    usePlayer（播放器状态机）、Topbar、Splitter、OutputPane、ErrorBoundary
 src/App.tsx        主壳：版面 + 接线 + 全局快捷键 +「⇔ 自动并排」
+src/i18n.ts        简/繁字典（简体原文当 key，缺字串自动回退）
 src/presets.ts     26 个内置示例
-test/              37 个测试文件（语义 / 渲染 / 布局 / golden / 兼容矩阵）
+test/              38 个测试文件（语义 / 渲染 / 布局 / golden / 兼容矩阵）
 ```
 
 依赖方向：`components → interpreter`，解释器不 import React，可单独在 Node 里跑（测试就是这么做的）。
@@ -85,7 +89,7 @@ test/              37 个测试文件（语义 / 渲染 / 布局 / golden / 兼�
 | 项 | 数值 |
 |---|---|
 | 源码规模 | 31 个文件 / 约 8,000 行 TypeScript（解释器 + 渲染层） |
-| 测试 | 37 个测试文件 / 2,573 行；golden 特性化 + SSR 渲染 + 布局纯函数 + 兼容矩阵 |
+| 测试 | 38 个测试文件 / 2,573 行；golden 特性化 + SSR 渲染 + 布局纯函数 + 兼容矩阵 |
 | 产物 | 866 KB JS（gzip 271 KB）+ 19 KB CSS；无后端、无运行时服务 |
 | 依赖 | React 19 + CodeMirror 6（无编辑器外的大型框架） |
 | 内置示例 | 26 个 |
@@ -95,7 +99,7 @@ test/              37 个测试文件（语义 / 渲染 / 布局 / golden / 兼�
 
 ```bash
 npm run typecheck   # tsc --noEmit（0 错误）
-npm test            # 37 个测试文件
+npm test            # 38 个测试文件
 npm run verify      # typecheck + test + build（提交前必跑）
 ```
 

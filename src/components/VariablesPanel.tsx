@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { Snapshot } from '../interpreter/interpreter'
+import { t } from '../i18n'
 import type { VarView, Cell } from '../interpreter/memory'
 import {
   LAYOUT_STORAGE_KEY,
@@ -125,9 +126,8 @@ export default function VariablesPanel({ snapshot, packSignal = 0 }: Props) {
       // 這條分支也一定要掛 panelRef：它是最初一帧的 .viz-body（見上面 callback ref 的說明）
       <div className="viz-body" ref={panelRef}>
         <div className="viz-empty">
-          点击上方「运行」或「单步」开始。<br />
-          支持：int / long long / char / bool / string / double 变量、数组、二维数组、vector、
-          for / while / if、四则运算、cout 输出。
+          {t('点击上方「运行」或「单步」开始。')}<br />
+          {t('支持：int / long long / char / bool / string / double 变量、数组、二维数组、vector、for / while / if、四则运算、cout 输出。')}
         </div>
       </div>
     )
@@ -212,24 +212,24 @@ export default function VariablesPanel({ snapshot, packSignal = 0 }: Props) {
     <div className="viz-body" ref={panelRef}>
       {snapshot.sortInfo && (
         <div className="sort-banner">
-          <span className="sort-label">排序</span>
+          <span className="sort-label">{t('排序')}</span>
           <span className="sort-text">
             {snapshot.sortInfo.name} · 比较 {snapshot.sortInfo.comparisons} 次 · n = {snapshot.sortInfo.n}
           </span>
-          {snapshot.sortInfo.warned && <span className="sort-warn">⚠ 比较函数不满足严格弱序</span>}
+          {snapshot.sortInfo.warned && <span className="sort-warn">{t('⚠ 比较函数不满足严格弱序')}</span>}
         </div>
       )}
       {snapshot.condition && (
         <div className="cond-banner">
-          <span className="cond-label">判断</span>
+          <span className="cond-label">{t('判断')}</span>
           <span className="cond-expr">{snapshot.condition.text}</span>
           <span className={'cond-result ' + (snapshot.condition.result ? 'true' : 'false')}>
-            {snapshot.condition.result ? '✓ 为真 · 继续' : '✗ 为假 · 退出'}
+            {t(snapshot.condition.result ? '✓ 为真 · 继续' : '✗ 为假 · 退出')}
           </span>
         </div>
       )}
       {snapshot.vars.length === 0 && !(snapshot.callTree && snapshot.callTree.children.length > 0) ? (
-        <div className="viz-empty">还没有变量。</div>
+        <div className="viz-empty">{t('还没有变量。')}</div>
       ) : (
         <div className="viz-split">
           <div className="viz-main">
@@ -343,7 +343,7 @@ function CardControls({ card, onMove }: { card: CardView; onMove?: (dir: -1 | 1)
       <span
         className="card-drag"
         draggable
-        title="按住拖动这张卡片，放到别的卡片上就换位置"
+        title={t('按住拖动这张卡片，放到别的卡片上就换位置')}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move'
           e.dataTransfer.setData('text/plain', 'card')
@@ -355,16 +355,16 @@ function CardControls({ card, onMove }: { card: CardView; onMove?: (dir: -1 | 1)
       </span>
       {onMove && (
         <>
-          <button className="reorder-btn" title="上移" onClick={() => onMove(-1)}>↑</button>
-          <button className="reorder-btn" title="下移" onClick={() => onMove(1)}>↓</button>
+          <button className="reorder-btn" title={t('上移')} onClick={() => onMove(-1)}>↑</button>
+          <button className="reorder-btn" title={t('下移')} onClick={() => onMove(1)}>↓</button>
         </>
       )}
-      <button className="reorder-btn" title="缩小这张卡片" onClick={() => card.onZoom(-1)}>−</button>
-      <button className="reorder-btn zoom-pct" title="点一下还原成 100%" onClick={card.onResetZoom}>{pct}%</button>
-      <button className="reorder-btn" title="放大这张卡片（放大时卡片会自动占整行）" onClick={() => card.onZoom(1)}>＋</button>
+      <button className="reorder-btn" title={t('缩小这张卡片')} onClick={() => card.onZoom(-1)}>−</button>
+      <button className="reorder-btn zoom-pct" title={t('点一下还原成 100%')} onClick={card.onResetZoom}>{pct}%</button>
+      <button className="reorder-btn" title={t('放大这张卡片（放大时卡片会自动占整行）')} onClick={() => card.onZoom(1)}>＋</button>
       <button
         className="reorder-btn"
-        title={card.zoom > 1 ? '放大時自動佔整行；按這裡回到 100% 半宽' : card.wide ? '改成半宽' : '改成整行宽'}
+        title={card.zoom > 1 ? t('放大時自動佔整行；按這裡回到 100% 半宽') : card.wide ? t('改成半宽') : t('改成整行宽')}
         onClick={card.onToggleWide}
       >
         {card.wide ? '⤡' : '⤢'}
@@ -395,7 +395,7 @@ function ScalarVar({
       <div className="sv-name">
         {v.name}
         <span className={'scope-badge ' + (v.scope === 'global' ? 'scope-global' : 'scope-local')}>{v.scope}</span>
-        {v.alias && <span className="alias-badge" title="这是引用参数：与调用方的变量共用同一份数据">参数（别名）</span>}
+        {v.alias && <span className="alias-badge" title={t('这是引用参数：与调用方的变量共用同一份数据')}>{t('参数（别名）')}</span>}
       </div>
       <div className="sv-value">{formatScalar(cell.type, cell.value)}</div>
     </div>
@@ -432,7 +432,7 @@ function VarItem({
         {v.name}
         <span className={'scope-badge ' + (v.scope === 'global' ? 'scope-global' : 'scope-local')}>{v.scope}</span>
         {v.alias && (
-          <span className="alias-badge" title="这是引用/数组形参：与调用方的变量共用同一份数据">
+          <span className="alias-badge" title={t('这是引用/数组形参：与调用方的变量共用同一份数据')}>
             参数（别名）
           </span>
         )}

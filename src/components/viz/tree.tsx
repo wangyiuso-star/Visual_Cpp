@@ -6,6 +6,7 @@ import type { Snapshot, CallNode } from '../../interpreter/interpreter'
 import type { Cell, VarView, BstNode } from '../../interpreter/memory'
 import type { Type } from '../../interpreter/ast'
 import { cellCls, formatCellShort, formatScalar, isHit } from './format'
+import { t, tf } from '../../i18n'
 
 export const TREE_Z_MIN = 0.3
 export const TREE_Z_MAX = 2
@@ -210,16 +211,16 @@ export function TreeViewport({
   const bar = (
     <div className="tree-bar">
       {extra}
-      <button className="mini-btn" onClick={() => bump(-0.1)} title="缩小">−</button>
+      <button className="mini-btn" onClick={() => bump(-0.1)} title={t('缩小')}>−</button>
       <span className="tree-zoom-label">{Math.round(z * 100)}%</span>
-      <button className="mini-btn" onClick={() => bump(0.1)} title="放大">＋</button>
-      <button className={'mini-btn' + (auto ? ' on' : '')} onClick={() => setAuto((a) => !a)} title="自动缩放到能放下整棵树">
+      <button className="mini-btn" onClick={() => bump(0.1)} title={t('放大')}>＋</button>
+      <button className={'mini-btn' + (auto ? ' on' : '')} onClick={() => setAuto((a) => !a)} title={t('自动缩放到能放下整棵树')}>
         适应
       </button>
-      <button className="mini-btn" onClick={reset} title="恢复 100%">1:1</button>
+      <button className="mini-btn" onClick={reset} title={t('恢复 100%')}>1:1</button>
       <span className="spacer" />
-      <button className="mini-btn" onClick={() => setMagnified((m) => !m)} title="放大到整屏（Esc 退出）">
-        {magnified ? '还原' : '放大'}
+      <button className="mini-btn" onClick={() => setMagnified((m) => !m)} title={t('放大到整屏（Esc 退出）')}>
+        {t(magnified ? '还原' : '放大')}
       </button>
     </div>
   )
@@ -247,7 +248,7 @@ export function TreeViewport({
         <div className="tree-overlay-head">
           <span className="tree-overlay-title">{title}</span>
           <span className="spacer" />
-          <button className="mini-btn" onClick={() => setMagnified(false)}>关闭 (Esc)</button>
+          <button className="mini-btn" onClick={() => setMagnified(false)}>{t('关闭 (Esc)')}</button>
         </div>
         {bar}
         {body}
@@ -326,15 +327,15 @@ export function CallTreeGraph({ root, activeCallId }: { root: CallNode; activeCa
   return (
     <TreeViewport
       vp={vp}
-      title={'调用树 · ' + (mode === 'stack' ? '当前调用栈' : '完整树')}
+      title={tf('调用树 · {0}', mode === 'stack' ? t('当前调用栈') : t('完整树'))}
       follow={follow}
       extra={
         <button
           className="mini-btn"
           onClick={() => setMode((m) => (m === 'stack' ? 'tree' : 'stack'))}
-          title="完整树 / 仅当前调用路径"
+          title={t('完整树 / 仅当前调用路径')}
         >
-          {mode === 'stack' ? '调用栈' : '完整树'}
+          {t(mode === 'stack' ? '调用栈' : '完整树')}
         </button>
       }
     >

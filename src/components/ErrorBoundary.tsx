@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
+import { t } from '../i18n'
 
 // 渲染期抛错时，React 会把整棵树卸掉 —— 使用者看到的就是「黑屏 / 白屏」，
 // 而且完全不知道发生什么事、也不知道要回报什么。
@@ -14,7 +15,7 @@ export interface CrashInfo {
 export function describeCrash(e: unknown): CrashInfo {
   const err = e instanceof Error ? e : new Error(String(e))
   return {
-    title: '内部错误（这是本工具的 bug，不是你程式写错）',
+    title: t('内部错误（这是本工具的 bug，不是你程式写错）'),
     detail: err.message || String(e),
     stack: err.stack,
   }
@@ -40,7 +41,7 @@ export function CrashCard({ crash, onReset }: { crash: CrashInfo; onReset?: () =
       <div className="crash-hint">
         请把「程式码 + 上面这行讯息」回报给我们（讯息也印在浏览器 Console 里）。点「重置」可以继续用。
       </div>
-      <button className="btn-sm" onClick={() => onReset?.()}>重置</button>
+      <button className="btn-sm" onClick={() => onReset?.()}>{t('重置')}</button>
     </div>
   )
 }
@@ -54,7 +55,7 @@ export default class ErrorBoundary extends Component<Props, { crash: CrashInfo |
 
   componentDidCatch(e: unknown, info: ErrorInfo): void {
     // 保留在 console 里，方便回报时复制
-    console.error('[cpp-viz:' + (this.props.label ?? 'panel') + '] 渲染错误', e, info)
+    console.error('[cpp-viz:' + (this.props.label ?? 'panel') + '] ' + t('渲染错误'), e, info)
   }
 
   componentDidUpdate(prev: Props): void {

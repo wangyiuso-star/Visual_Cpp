@@ -1,4 +1,5 @@
 import type { Snapshot } from '../interpreter/interpreter'
+import { t } from '../i18n'
 
 export interface OutputView {
   text: string
@@ -16,17 +17,17 @@ export interface OutputView {
 export function outputView(cur: Snapshot | null, error: string | null): OutputView {
   if (cur) {
     if (cur.error) return { text: cur.error, isError: true, warning: cur.warning }
-    return { text: cur.output || '(无输出)', isError: false, warning: cur.warning }
+    return { text: cur.output || t('(无输出)'), isError: false, warning: cur.warning }
   }
   if (error) return { text: error, isError: true }
-  return { text: '(尚未运行)', isError: false }
+  return { text: t('(尚未运行)'), isError: false }
 }
 
 /** 左下的輸出面板（從 App.tsx 抽出來，重構 S7）。 */
 export default function OutputPane({ view, height }: { view: OutputView; height?: number }) {
   return (
     <div className="output-pane" style={height === undefined ? undefined : { height }}>
-      <div className="output-pane-title">输出</div>
+      <div className="output-pane-title">{t('输出')}</div>
       {view.warning && (
         <div className="output-warning" role="status">
           ⚠ {view.warning}

@@ -3,6 +3,10 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { parse } from '../src/interpreter/parser'
 import { run } from '../src/interpreter/interpreter'
+// 測試要在固定語言下跑：這台機器的 navigator.language 可能是 zh-HK（繁體），
+// 斷言的是簡體字串，所以先把介面語言釘成 zh-CN。
+import { setLocale } from '../src/i18n'
+setLocale('zh-CN')
 import VariablesPanel from '../src/components/VariablesPanel'
 
 // 鎖住兩件事：

@@ -9,6 +9,7 @@ import { DEFAULT_INDENT_SIZE, normalizeIndentSize } from './components/editorSet
 import { usePlayer } from './components/usePlayer'
 import { EDITOR_PCT_MAX, EDITOR_PCT_MIN, twoColumnMinWidth } from './components/panelLayout'
 import { PRESETS } from './presets'
+import { t, tf, useLocale } from './i18n'
 
 const SAMPLE = '#include <bits/stdc++.h>\nusing namespace std;\n\nint fib(int n) {\n  if (n <= 1) return n;\n  return fib(n - 1) + fib(n - 2);\n}\n\nint main() {\n  cout << fib(5) << endl;\n  return 0;\n}\n'
 
@@ -17,6 +18,7 @@ const SAMPLE = '#include <bits/stdc++.h>\nusing namespace std;\n\nint fib(int n)
  * 播放/單步/斷點在 usePlayer，工具列在 Topbar，輸出面板在 OutputPane，分割線在 Splitter（重構 S7）。
  */
 export default function App() {
+  useLocale() // 訂閱介面語言：切換時整個殼重畫
   const [code, setCode] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('cpp-viz-code')
@@ -87,7 +89,7 @@ export default function App() {
       })
       tries++
       if (tries < 4) window.setTimeout(step, 40)
-      else setPackHint('螢幕不夠寬：面板已放到最大（編輯器 ' + EDITOR_PCT_MIN + '%），卡片區仍放不下两栏')
+      else setPackHint(tf('螢幕不夠寬：面板已放到最大（編輯器 {0}%），卡片區仍放不下两栏', EDITOR_PCT_MIN))
     }
     step()
   }
@@ -201,7 +203,7 @@ export default function App() {
 
       <div className="main">
         <div className="editor-pane" style={{ flex: '0 0 ' + editorPct + '%' }}>
-          <div className="pane-title">代码编辑器 · C++</div>
+          <div className="pane-title">{t('代码编辑器 · C++')}</div>
           <div className="left-body" ref={leftBodyRef}>
             <div className="editor-body" style={{ height: availH * codePct / 100 }}>
               <CodeEditor
@@ -213,36 +215,36 @@ export default function App() {
                 indentSize={indentSize}
               />
             </div>
-            <Splitter orientation="horizontal" onMouseDown={hDrag.onCodeDividerMouseDown} title="拖动调整代码框高度" />
+            <Splitter orientation="horizontal" onMouseDown={hDrag.onCodeDividerMouseDown} title={t('拖动调整代码框高度')} />
             <div className="cin-pane" style={{ height: availH * cinPct / 100 }}>
-              <div className="cin-pane-title">cin 输入</div>
+              <div className="cin-pane-title">{t('cin 输入')}</div>
               <textarea
                 className="cin-textarea"
                 value={input}
                 onChange={(e) => onInputChange(e.target.value)}
-                placeholder="预填 cin 输入，支持空格/换行分隔"
+                placeholder={t('预填 cin 输入，支持空格/换行分隔')}
               />
             </div>
-            <Splitter orientation="horizontal" onMouseDown={hDrag.onOutDividerMouseDown} title="拖动调整 cin / 输出高度" />
+            <Splitter orientation="horizontal" onMouseDown={hDrag.onOutDividerMouseDown} title={t('拖动调整 cin / 输出高度')} />
             <OutputPane view={view} height={availH * outPct / 100} />
           </div>
         </div>
         <Splitter orientation="vertical" onMouseDown={vDrag.onMouseDown} />
         <div className="viz-pane">
           <div className="pane-title">
-            变量 / 数据结构
+            {t('变量 / 数据结构')}
             <span className="legend">
-              <span className="lg"><span className="swatch line" />当前行</span>
-              <span className="lg"><span className="swatch read" />读取</span>
-              <span className="lg"><span className="swatch judge" />判断</span>
-              <span className="lg"><span className="swatch write" />写入</span>
+              <span className="lg"><span className="swatch line" />{t('当前行')}</span>
+              <span className="lg"><span className="swatch read" />{t('读取')}</span>
+              <span className="lg"><span className="swatch judge" />{t('判断')}</span>
+              <span className="lg"><span className="swatch write" />{t('写入')}</span>
             </span>
             <button
               className="btn btn-sm pack-btn"
               onClick={autoPack}
-              title="把右側面板調寬到卡片剛好兩欄並排，並把樹 / 遞歸樹的「整行」與放大重設"
+              title={t('把右側面板調寬到卡片剛好兩欄並排，並把樹 / 遞歸樹的「整行」與放大重設')}
             >
-              ⇔ 自動並排
+              {t('⇔ 自动并排')}
             </button>
             {packHint && <span className="pack-hint">{packHint}</span>}
           </div>

@@ -3,6 +3,7 @@
 // 不需要為了測 formatCellShort 而 import 一整個 React 元件。
 import type { Cell, ScalarValue, BstNode } from '../../interpreter/memory'
 import type { Type } from '../../interpreter/ast'
+import { tf } from '../../i18n'
 
 export const WIN_1D = 10
 export const WIN_2D = 5
@@ -100,7 +101,7 @@ export function typeShape(t: Type): string {
 }
 
 export function cellLabel(cell: Cell): string {
-  if (cell.kind === 'scalar' && cell.type === 'string') return 'string · 长度 ' + String(cell.value ?? '').length
+  if (cell.kind === 'scalar' && cell.type === 'string') return tf('string · 长度 {0}', String(cell.value ?? '').length)
   if (cell.kind === 'scalar') return cell.type
   if (cell.kind === 'array') {
     let c: Cell | undefined = cell
@@ -112,22 +113,24 @@ export function cellLabel(cell: Cell): string {
     const leaf = c && c.kind === 'scalar' ? c.type : c && c.kind === 'vector' ? 'vector<' + typeShape(c.elemType) + '>' : typeShape(cell.elemType)
     return leaf + dims.map((d) => '[' + d + ']').join('')
   }
-  if (cell.kind === 'stack') return 'stack<' + typeShape(cell.elemType) + '> · 长度 ' + cell.items.length
-  if (cell.kind === 'queue') return 'queue<' + typeShape(cell.elemType) + '> · 长度 ' + cell.items.length
+  if (cell.kind === 'stack') return tf('stack<{0}> · 长度 {1}', typeShape(cell.elemType), cell.items.length)
+  if (cell.kind === 'queue') return tf('queue<{0}> · 长度 {1}', typeShape(cell.elemType), cell.items.length)
   if (cell.kind === 'pqueue') {
-    return 'priority_queue<' + typeShape(cell.elemType) + '>' + (cell.minHeap ? ' · 小根堆' : ' · 大根堆') + ' · 长度 ' + cell.items.length
+    return cell.minHeap
+      ? tf('priority_queue<{0}> · 小根堆 · 长度 {1}', typeShape(cell.elemType), cell.items.length)
+      : tf('priority_queue<{0}> · 大根堆 · 长度 {1}', typeShape(cell.elemType), cell.items.length)
   }
-  if (cell.kind === 'tree') return 'tree<' + typeShape(cell.elemType) + '> · 节点 ' + cell.size
-  if (cell.kind === 'bst') return 'bst<' + typeShape(cell.elemType) + '> · 节点 ' + cell.count
-  if (cell.kind === 'set') return 'set<' + typeShape(cell.elemType) + '> · 元素 ' + cell.items.length
-  if (cell.kind === 'map') return 'map<' + typeShape(cell.keyType) + ',' + typeShape(cell.valueType) + '> · 元素 ' + cell.entries.length
-  if (cell.kind === 'umap') return 'unordered_map<' + typeShape(cell.keyType) + ',' + typeShape(cell.valueType) + '> · 元素 ' + cell.entries.length
+  if (cell.kind === 'tree') return tf('tree<{0}> · 节点 {1}', typeShape(cell.elemType), cell.size)
+  if (cell.kind === 'bst') return tf('bst<{0}> · 节点 {1}', typeShape(cell.elemType), cell.count)
+  if (cell.kind === 'set') return tf('set<{0}> · 元素 {1}', typeShape(cell.elemType), cell.items.length)
+  if (cell.kind === 'map') return tf('map<{0},{1}> · 元素 {2}', typeShape(cell.keyType), typeShape(cell.valueType), cell.entries.length)
+  if (cell.kind === 'umap') return tf('unordered_map<{0},{1}> · 元素 {2}', typeShape(cell.keyType), typeShape(cell.valueType), cell.entries.length)
   if (cell.kind === 'pair') return 'pair<' + typeShape(cell.firstType) + ',' + typeShape(cell.secondType) + '>'
-  if (cell.kind === 'deque') return 'deque<' + typeShape(cell.elemType) + '> · 长度 ' + cell.items.length
-  if (cell.kind === 'struct') return cell.structName + ' · 成员 ' + cell.members.length
+  if (cell.kind === 'deque') return tf('deque<{0}> · 长度 {1}', typeShape(cell.elemType), cell.items.length)
+  if (cell.kind === 'struct') return tf('{0} · 成员 {1}', cell.structName, cell.members.length)
   // 同 VariablesPanel：ref 應該在 dumpAll 就解引用完了
-  if (cell.kind === 'ref') return '引用 → ' + cell.target.name
-  return 'vector<' + typeShape(cell.elemType) + '> · 长度 ' + cell.cells.length
+  if (cell.kind === 'ref') return tf('引用 → {0}', cell.target.name)
+  return tf('vector<{0}> · 长度 {1}', typeShape(cell.elemType), cell.cells.length)
 }
 
 export function rowLen(row: Cell): number {

@@ -2,6 +2,12 @@
 
 > 註：本檔是逐版本開發日誌。早期條目提到的「HKOI」是作者當時參與的外部教學專案；**2026-10-19 起本專案已與該專案脫鉤**（跨專案測試已移除，倉庫自包含），歷史條目保持原樣以保留脈絡。
 
+- 2026-10-19：**v0.14.0 —— 界面簡／繁切換（香港慣用語）**。
+  - 新增 `src/i18n.ts`：**用簡體原文當 key**（gettext 風格），字典只收「繁簡不同」的字串 → 之後加英文只要多一層字典。`t()` 找不到就原樣回傳，所以可以安全地包在所有字串外層。
+  - 繁體不是逐字轉，而是港台慣用語：變數／陣列／函式／記憶體／迴圈／佇列／堆疊／遞迴／字串；示例名也一起（合併排序、二分搜尋、河內塔…）。
+  - 語言選擇：`localStorage["cpp-viz.locale"]`；第一次開依瀏覽器語言（`zh-HK` / `zh-TW` / `zh-MO` / `Hant` → 繁體，其餘簡體）。切換入口在「设置 → 语言」，用 `useSyncExternalStore` 訂閱、即時重畫（不用重新載入）。
+  - 測試：新增 `test/i18n-test.ts`（14 條：兩種語言取到的字串不同、香港用語抽查、模板參數、未知字串回退、切換即時生效）；`aliasbadge-test` / `appshell-test` / `crash-test` 這三個斷言簡體字串的檔，開頭釘住 `setLocale("zh-CN")`——因為在 zh-HK 的機器上跑的預設語言會是繁體（這個坑就是它們先掛掉才發現的）。
+  - 測試檔 37 → 38，`npm run verify` 全綠。
 - 2026-10-19：**v0.13.0 —— `switch` / `case` / `default`**。
   - 語法：`switch (expr) { case c1: ... case c2: ... default: ... }`；允許標籤疊寫（`case 1: case 2:`），`default` 可以寫在中間或最前。
   - 語義照 C++：subject 只求值一次 → 找第一個相等的 case（沒有就 default）→ **一路 fallthrough** 到 `break` 或結尾。`break` 沿用 `BreakSignal`，所以 switch 裡的 `break` 只跳出 switch、外層迴圈的 `break` 行為不變；`continue` 仍由外層迴圈接住。
